@@ -6,19 +6,26 @@ members = ["app/*", "lib/*"]
 core_ng = { path = "lib/core_ng" }
 
 tracing = "*"
-tracing-subscriber = { version = "*", features = ["env-filter"] }
+tracing-subscriber = "*"
 anyhow = "*"
-
-clap = { version = "*", features = ["derive"] }
-clap_complete = "*"
-
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+
 tokio = { version = "*", features = ["full"] }
 tokio-util = { version = "*", features = ["rt"] }
 tokio-stream = { version = "*" }
 axum = { version = "*", features = ["macros"] }
-reqwest = { version = "*", features = ["stream"] }
+axum-server = { version = "*", features = ["tls-rustls"] }
+reqwest = { version = "*", default-features = false, features = [
+    "stream",
+    "rustls-tls",
+] }
+
+rdkafka = { version = "*", default-features = false, features = [
+    "dynamic-linking",
+    "libz",
+    "tokio",
+] }
 
 futures = "*"
 bytes = "*"
