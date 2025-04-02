@@ -1,5 +1,6 @@
 use std::time::SystemTime;
 
+use anyhow::Result;
 use axum::Router;
 use axum::extract::MatchedPath;
 use axum::extract::Request;
@@ -11,15 +12,14 @@ use axum::routing::get;
 use chrono::DateTime;
 use chrono::Utc;
 use tokio::net::TcpListener;
-use tokio::signal;
-use tokio::signal::unix::SignalKind;
+use tokio::sync::broadcast;
 use tracing::Instrument;
 use tracing::info;
 use tracing::info_span;
 use tracing::trace;
 use uuid::Uuid;
 
-pub async fn start_http_server(router: Router) -> anyhow::Result<()> {
+pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::Receiver<()>) -> Result<()> {
     let app = Router::new();
     let app = app.route("/health-check", get(health_check));
     let app = app.merge(router);
@@ -28,30 +28,13 @@ pub async fn start_http_server(router: Router) -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:3000").await?;
     info!("http server stated");
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal.recv().await.unwrap();
+        })
         .await?;
     info!("http server stopped");
 
     Ok(())
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
 }
 
 async fn health_check() -> StatusCode {

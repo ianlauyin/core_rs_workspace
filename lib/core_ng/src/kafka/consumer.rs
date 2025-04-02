@@ -5,16 +5,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Context;
 use anyhow::Result;
 use rdkafka::ClientConfig;
 use rdkafka::Message as _;
+use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::consumer::CommitMode;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::BorrowedMessage;
 use rdkafka::util::Timeout;
 use serde::de::DeserializeOwned;
+use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -25,7 +26,7 @@ pub struct Message<P: DeserializeOwned> {
     pub value: P,
 }
 
-trait MessageHandler<S> {
+trait MessageHandler<S>: Send + Sync {
     fn handle(
         &self,
         state: Arc<S>,
@@ -47,19 +48,47 @@ where
     }
 }
 
+pub struct ConsumerConfig {
+    pub group_id: &'static str,
+    pub bootstrap_servers: &'static str,
+    pub poll_max_wait_time: Duration,
+    pub poll_max_records: usize,
+}
+
+impl Default for ConsumerConfig {
+    fn default() -> Self {
+        Self {
+            group_id: env!("CARGO_PKG_NAME"),
+            bootstrap_servers: "localhost:9092",
+            poll_max_wait_time: Duration::from_secs(5),
+            poll_max_records: 1000,
+        }
+    }
+}
+
 pub struct MessageConsumer<S> {
     config: ClientConfig,
-    handlers: HashMap<&'static str, Arc<Box<dyn MessageHandler<S>>>>,
+    handlers: HashMap<&'static str, Box<dyn MessageHandler<S>>>,
+    shutdown_signel: Receiver<()>,
+    poll_max_wait_time: Duration,
+    poll_max_records: usize,
 }
 
 impl<S> MessageConsumer<S>
 where
     S: Send + Sync + 'static,
 {
-    pub fn new(config: ClientConfig) -> Self {
+    pub fn new(config: ConsumerConfig, shutdown_signel: Receiver<()>) -> Self {
         Self {
-            config,
+            config: ClientConfig::new()
+                .set("group.id", config.group_id)
+                .set("bootstrap.servers", config.bootstrap_servers)
+                .set_log_level(RDKafkaLogLevel::Info)
+                .to_owned(),
             handlers: HashMap::new(),
+            shutdown_signel,
+            poll_max_wait_time: config.poll_max_wait_time,
+            poll_max_records: config.poll_max_records,
         }
     }
 
@@ -69,20 +98,41 @@ where
         H: Fn(Arc<S>, Message<P>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
     {
-        self.add_bulk_handler(topic, move |state: Arc<S>, messages: Vec<Message<P>>| {
+        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
+            let mut message_groups: HashMap<Option<String>, Vec<Message<P>>> = HashMap::new();
+            for message in messages {
+                let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
+                message_groups.entry(key).or_default().push(message.into());
+            }
             let handler = handler.clone();
             async move {
                 let mut handles = vec![];
-                for message in messages {
+                for (key, messages) in message_groups {
                     let state = Arc::clone(&state);
-                    handles.push(tokio::spawn(handler(state, message)));
+                    let handler = handler.clone();
+                    if key.is_none() {
+                        for message in messages {
+                            let state = Arc::clone(&state);
+                            handles.push(tokio::spawn(handler(state, message)));
+                        }
+                    } else {
+                        handles.push(tokio::spawn(async move {
+                            for message in messages {
+                                let state = Arc::clone(&state);
+                                handler(state, message).await?;
+                            }
+                            Ok(())
+                        }));
+                    }
                 }
                 for handle in handles {
                     handle.await??;
                 }
                 Ok(())
             }
-        });
+        };
+
+        self.handlers.insert(topic, Box::new(handler));
     }
 
     pub fn add_bulk_handler<P, H, Fut>(&mut self, topic: &'static str, handler: H)
@@ -92,14 +142,14 @@ where
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
     {
         let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
-            let messages = convert_messages(messages).unwrap();
+            let messages = messages.into_iter().map(From::from).collect();
             handler(state, messages)
         };
 
-        self.handlers.insert(topic, Arc::new(Box::new(handler)));
+        self.handlers.insert(topic, Box::new(handler));
     }
 
-    pub async fn start(self, state: S) -> Result<()> {
+    pub async fn start(mut self, state: S) -> Result<()> {
         let state = Arc::new(state);
 
         let handlers = &self.handlers;
@@ -110,63 +160,62 @@ where
         info!("kakfa consumer started, topics={:?}", topics);
 
         loop {
-            let messages = poll_messages(&consumer, Duration::from_secs(5), 1000)?;
+            let messages = poll_messages(&consumer, self.poll_max_wait_time, self.poll_max_records)?;
 
-            let mut handles: Vec<JoinHandle<Result<()>>> = vec![];
+            if !messages.is_empty() {
+                let mut handles: Vec<JoinHandle<Result<()>>> = vec![];
 
-            for (topic, messages) in messages {
-                let handler = handlers.get(topic.as_str()).unwrap();
-                let handler = Arc::clone(handler);
-                let state = state.clone();
-                handles.push(tokio::spawn(handler.handle(state, messages)));
+                for (topic, messages) in messages {
+                    if let Some(handler) = handlers.get(topic.as_str()) {
+                        let state = state.clone();
+                        handles.push(tokio::spawn(handler.handle(state, messages)));
+                    }
+                    // subscribed topic must have a handler
+                }
+
+                for handle in handles {
+                    handle.await??;
+                }
+
+                consumer.commit_consumer_state(CommitMode::Async)?;
             }
 
-            for handle in handles {
-                handle.await??;
+            if self.shutdown_signel.try_recv().is_ok() {
+                info!("kakfa consumer stopped, topics={:?}", topics);
+                return Ok(());
             }
-
-            consumer.commit_consumer_state(CommitMode::Async)?;
         }
     }
 }
 
-fn convert_messages<P>(messages: Vec<BorrowedMessage<'_>>) -> Result<Vec<Message<P>>>
-where
-    P: DeserializeOwned,
-{
-    messages
-        .into_iter()
-        .map(|message| {
-            let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
-            let payload = message
-                .payload()
-                .map(|data| String::from_utf8_lossy(data).to_string())
-                .context("there is no payload")?;
+impl<P: DeserializeOwned> From<BorrowedMessage<'_>> for Message<P> {
+    fn from(message: BorrowedMessage<'_>) -> Message<P> {
+        let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
+        let value = message.payload().map(|data| String::from_utf8_lossy(data).to_string());
 
-            let value = from_json(&payload)?;
-            Ok(Message { key, value })
-        })
-        .collect()
+        let value = value.map(|v| from_json(&v).unwrap()).unwrap();
+        Message { key, value }
+    }
 }
 
 fn poll_messages(
     consumer: &'_ BaseConsumer,
-    timeout: Duration,
-    max_messages: usize,
+    max_wait_time: Duration,
+    max_records: usize,
 ) -> Result<HashMap<String, Vec<BorrowedMessage<'_>>>> {
     let mut messages: HashMap<String, Vec<BorrowedMessage<'_>>> = HashMap::new();
     let start_time = Instant::now();
     loop {
         let elapsed = start_time.elapsed();
-        if elapsed >= timeout {
+        if elapsed >= max_wait_time {
             break;
         }
 
-        if messages.len() >= max_messages {
+        if messages.len() >= max_records {
             break;
         }
 
-        if let Some(result) = consumer.poll(Timeout::After(timeout.saturating_sub(elapsed))) {
+        if let Some(result) = consumer.poll(Timeout::After(max_wait_time.saturating_sub(elapsed))) {
             let message = result?;
             let topic = message.topic().to_owned();
             messages.entry(topic).or_default().push(message);
