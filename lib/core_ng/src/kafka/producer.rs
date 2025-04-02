@@ -23,17 +23,17 @@ impl Producer {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", config.bootstrap_servers)
             .set("message.timeout.ms", "5000")
-            .set("compression.codec", "ZSTD")
+            .set("compression.codec", "zstd")
             .create()
             .expect("Producer creation error");
         Self { producer }
     }
 
-    pub async fn send<T>(&self, topic: &Topic<T>, key: Option<String>, message: T) -> Result<()>
+    pub async fn send<T>(&self, topic: &Topic<T>, key: Option<String>, message: &T) -> Result<()>
     where
         T: Serialize + Debug,
     {
-        let payload = to_json(&message)?;
+        let payload = to_json(message)?;
         let mut record = FutureRecord::<String, String>::to(topic.name).payload(&payload);
         if let Some(ref key) = key {
             record = record.key(key);

@@ -61,7 +61,7 @@ impl Default for ConsumerConfig {
         Self {
             group_id: env!("CARGO_PKG_NAME"),
             bootstrap_servers: "localhost:9092",
-            poll_max_wait_time: Duration::from_secs(5),
+            poll_max_wait_time: Duration::from_secs(1),
             poll_max_records: 1000,
         }
     }
@@ -91,14 +91,14 @@ where
         }
     }
 
-    pub fn add_handler<P, H, Fut>(&mut self, topic: &Topic<P>, handler: H)
+    pub fn add_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
-        P: DeserializeOwned + Send + Sync + 'static,
-        H: Fn(Arc<S>, Message<P>) -> Fut + Clone + Send + Sync + 'static,
+        H: Fn(Arc<S>, Message<M>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+        M: DeserializeOwned + Send + Sync + 'static,
     {
         let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
-            let mut message_groups: HashMap<Option<String>, Vec<Message<P>>> = HashMap::new();
+            let mut message_groups: HashMap<Option<String>, Vec<Message<M>>> = HashMap::new();
             for message in messages {
                 let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
                 message_groups.entry(key).or_default().push(message.into());
@@ -134,11 +134,11 @@ where
         self.handlers.insert(topic.name, Box::new(handler));
     }
 
-    pub fn add_bulk_handler<P, H, Fut>(&mut self, topic: &Topic<P>, handler: H)
+    pub fn add_bulk_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
-        P: DeserializeOwned,
-        H: Fn(Arc<S>, Vec<Message<P>>) -> Fut + Send + Sync + 'static,
+        H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+        M: DeserializeOwned,
     {
         let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
             let messages = messages.into_iter().map(From::from).collect();

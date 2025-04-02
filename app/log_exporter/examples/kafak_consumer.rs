@@ -4,6 +4,8 @@ use anyhow::Result;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::Message;
 use core_ng::kafka::consumer::MessageConsumer;
+use core_ng::kafka::producer::Producer;
+use core_ng::kafka::producer::ProducerConfig;
 use core_ng::kafka::topic::Topic;
 use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
@@ -20,6 +22,7 @@ struct TestMessage {
 
 struct State {
     topics: Topics,
+    producer: Producer,
 }
 
 struct Topics {
@@ -44,6 +47,9 @@ pub async fn main() -> Result<()> {
             test: Topic::new("test"),
             test_single: Topic::new("test_single"),
         },
+        producer: Producer::new(ProducerConfig {
+            bootstrap_servers: "dev.internal:9092",
+        }),
     };
 
     let shutdown = Shutdown::new();
@@ -64,12 +70,20 @@ pub async fn main() -> Result<()> {
 async fn handler(_state: Arc<State>, messages: Vec<Message<TestMessage>>) -> Result<()> {
     println!("count => {}", messages.len());
     for message in messages {
-        println!("Received message: {}", message.value.name);
+        println!("Received bulk message: {}", message.value.name);
     }
     Ok(())
 }
 
-async fn handler_single(_state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
+async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
     println!("Received single message: {}", message.value.name);
+
+    if let Some(key) = message.key {
+        if key == "1" {
+            state.producer.send(&state.topics.test, None, &message.value).await?;
+            state.producer.send(&state.topics.test, None, &message.value).await?;
+        }
+    }
+
     Ok(())
 }

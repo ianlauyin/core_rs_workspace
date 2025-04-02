@@ -20,7 +20,7 @@ pub async fn main() -> Result<()> {
 
     for i in 1..100 {
         producer
-            .send(&topic, Some("key".to_string()), TestMessage { name: format!("{i}") })
+            .send(&topic, Some(i.to_string()), &TestMessage { name: format!("{i}") })
             .await?;
     }
 
