@@ -19,6 +19,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tracing::info;
 
+use super::topic::Topic;
 use crate::json::from_json;
 
 pub struct Message<P: DeserializeOwned> {
@@ -69,7 +70,6 @@ impl Default for ConsumerConfig {
 pub struct MessageConsumer<S> {
     config: ClientConfig,
     handlers: HashMap<&'static str, Box<dyn MessageHandler<S>>>,
-    shutdown_signel: Receiver<()>,
     poll_max_wait_time: Duration,
     poll_max_records: usize,
 }
@@ -78,7 +78,7 @@ impl<S> MessageConsumer<S>
 where
     S: Send + Sync + 'static,
 {
-    pub fn new(config: ConsumerConfig, shutdown_signel: Receiver<()>) -> Self {
+    pub fn new(config: ConsumerConfig) -> Self {
         Self {
             config: ClientConfig::new()
                 .set("group.id", config.group_id)
@@ -86,13 +86,12 @@ where
                 .set_log_level(RDKafkaLogLevel::Info)
                 .to_owned(),
             handlers: HashMap::new(),
-            shutdown_signel,
             poll_max_wait_time: config.poll_max_wait_time,
             poll_max_records: config.poll_max_records,
         }
     }
 
-    pub fn add_handler<P, H, Fut>(&mut self, topic: &'static str, handler: H)
+    pub fn add_handler<P, H, Fut>(&mut self, topic: &Topic<P>, handler: H)
     where
         P: DeserializeOwned + Send + Sync + 'static,
         H: Fn(Arc<S>, Message<P>) -> Fut + Clone + Send + Sync + 'static,
@@ -132,10 +131,10 @@ where
             }
         };
 
-        self.handlers.insert(topic, Box::new(handler));
+        self.handlers.insert(topic.name, Box::new(handler));
     }
 
-    pub fn add_bulk_handler<P, H, Fut>(&mut self, topic: &'static str, handler: H)
+    pub fn add_bulk_handler<P, H, Fut>(&mut self, topic: &Topic<P>, handler: H)
     where
         P: DeserializeOwned,
         H: Fn(Arc<S>, Vec<Message<P>>) -> Fut + Send + Sync + 'static,
@@ -146,10 +145,10 @@ where
             handler(state, messages)
         };
 
-        self.handlers.insert(topic, Box::new(handler));
+        self.handlers.insert(topic.name, Box::new(handler));
     }
 
-    pub async fn start(mut self, state: S) -> Result<()> {
+    pub async fn start(self, state: S, mut shutdown_signel: Receiver<()>) -> Result<()> {
         let state = Arc::new(state);
 
         let handlers = &self.handlers;
@@ -180,7 +179,7 @@ where
                 consumer.commit_consumer_state(CommitMode::Async)?;
             }
 
-            if self.shutdown_signel.try_recv().is_ok() {
+            if shutdown_signel.try_recv().is_ok() {
                 info!("kakfa consumer stopped, topics={:?}", topics);
                 return Ok(());
             }

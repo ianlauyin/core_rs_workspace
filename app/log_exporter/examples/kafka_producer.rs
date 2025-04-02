@@ -1,8 +1,7 @@
-use core_ng::json::to_json;
-use rdkafka::ClientConfig;
-use rdkafka::producer::FutureProducer;
-use rdkafka::producer::FutureRecord;
-use rdkafka::util::Timeout;
+use anyhow::Result;
+use core_ng::kafka::producer::Producer;
+use core_ng::kafka::producer::ProducerConfig;
+use core_ng::kafka::topic::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -12,22 +11,18 @@ struct TestMessage {
 }
 
 #[tokio::main]
-pub async fn main() {
-    let producer: &FutureProducer = &ClientConfig::new()
-        .set("bootstrap.servers", "dev.internal:9092")
-        .set("message.timeout.ms", "5000")
-        .create()
-        .expect("Producer creation error");
+pub async fn main() -> Result<()> {
+    let producer = Producer::new(ProducerConfig {
+        bootstrap_servers: "dev.internal:9092",
+    });
+
+    let topic = Topic::new("test_single");
 
     for i in 1..100 {
         producer
-            .send(
-                FutureRecord::to("test_single")
-                    .key("key")
-                    .payload(to_json(&TestMessage { name: format!("{}", i) }).unwrap().as_str()),
-                Timeout::Never,
-            )
-            .await
-            .unwrap();
+            .send(&topic, Some("key".to_string()), TestMessage { name: format!("{i}") })
+            .await?;
     }
+
+    Ok(())
 }

@@ -4,6 +4,7 @@ use anyhow::Result;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::Message;
 use core_ng::kafka::consumer::MessageConsumer;
+use core_ng::kafka::topic::Topic;
 use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
@@ -17,7 +18,14 @@ struct TestMessage {
     name: String,
 }
 
-struct State {}
+struct State {
+    topics: Topics,
+}
+
+struct Topics {
+    test: Topic<TestMessage>,
+    test_single: Topic<TestMessage>,
+}
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
@@ -31,25 +39,26 @@ pub async fn main() -> Result<()> {
         )
         .init();
 
-    let state = State {};
+    let state = State {
+        topics: Topics {
+            test: Topic::new("test"),
+            test_single: Topic::new("test_single"),
+        },
+    };
 
     let shutdown = Shutdown::new();
-
-    let mut consumer = MessageConsumer::new(
-        ConsumerConfig {
-            group_id: "log-exporter",
-            bootstrap_servers: "dev.internal:9092",
-            ..ConsumerConfig::default()
-        },
-        shutdown.subscribe(),
-    );
-
-    consumer.add_bulk_handler("test", handler);
-    consumer.add_handler("test_single", handler_single);
-
+    let signal = shutdown.subscribe();
     shutdown.listen();
 
-    consumer.start(state).await
+    let mut consumer = MessageConsumer::new(ConsumerConfig {
+        group_id: "log-exporter",
+        bootstrap_servers: "dev.internal:9092",
+        ..ConsumerConfig::default()
+    });
+
+    consumer.add_bulk_handler(&state.topics.test, handler);
+    consumer.add_handler(&state.topics.test_single, handler_single);
+    consumer.start(state, signal).await
 }
 
 async fn handler(_state: Arc<State>, messages: Vec<Message<TestMessage>>) -> Result<()> {

@@ -25,6 +25,7 @@ rdkafka = { version = "*", default-features = false, features = [
     "dynamic-linking",
     "libz",
     "tokio",
+    "zstd",
 ] }
 
 futures = "*"
