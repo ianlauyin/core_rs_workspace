@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use anyhow::Context;
 use anyhow::Result;
 use rdkafka::ClientConfig;
 use rdkafka::Message as _;
@@ -24,32 +25,31 @@ pub struct Message<P: DeserializeOwned> {
     pub value: P,
 }
 
-pub trait MessageHandler<S, P: DeserializeOwned>: Send + Sync {
+trait MessageHandler<S> {
     fn handle(
         &self,
         state: Arc<S>,
-        messages: Vec<Message<P>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync + 'static>>;
+        messages: Vec<BorrowedMessage<'_>>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 }
 
-impl<F, Fut, S, P> MessageHandler<S, P> for F
+impl<F, Fut, S> MessageHandler<S> for F
 where
-    P: DeserializeOwned,
-    F: Fn(Arc<S>, Vec<Message<P>>) -> Fut + Send + Sync + 'static,
+    F: Fn(Arc<S>, Vec<BorrowedMessage<'_>>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<()>> + Send + Sync + 'static,
 {
     fn handle(
         &self,
         state: Arc<S>,
-        messages: Vec<Message<P>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync + 'static>> {
+        messages: Vec<BorrowedMessage<'_>>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
         Box::pin(self(state, messages))
     }
 }
 
 pub struct MessageConsumer<S> {
     config: ClientConfig,
-    handlers: HashMap<&'static str, Arc<Box<dyn MessageHandler<S, String>>>>,
+    handlers: HashMap<&'static str, Arc<Box<dyn MessageHandler<S>>>>,
 }
 
 impl<S> MessageConsumer<S>
@@ -72,7 +72,7 @@ where
         self.add_bulk_handler(topic, move |state: Arc<S>, messages: Vec<Message<P>>| {
             let handler = handler.clone();
             async move {
-                let mut handles: Vec<JoinHandle<Result<()>>> = vec![];
+                let mut handles = vec![];
                 for message in messages {
                     let state = Arc::clone(&state);
                     handles.push(tokio::spawn(handler(state, message)));
@@ -87,19 +87,13 @@ where
 
     pub fn add_bulk_handler<P, H, Fut>(&mut self, topic: &'static str, handler: H)
     where
-        P: DeserializeOwned + 'static,
-        H: Fn(Arc<S>, Vec<Message<P>>) -> Fut + Clone + Send + Sync + 'static,
+        P: DeserializeOwned,
+        H: Fn(Arc<S>, Vec<Message<P>>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
     {
-        let handler = move |state: Arc<S>, messages: Vec<Message<String>>| {
-            let messages = messages
-                .into_iter()
-                .map(|m| Message {
-                    key: m.key,
-                    value: from_json(&m.value).unwrap(),
-                })
-                .collect();
-            handler.handle(state, messages)
+        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
+            let messages = convert_messages(messages).unwrap();
+            handler(state, messages)
         };
 
         self.handlers.insert(topic, Arc::new(Box::new(handler)));
@@ -121,16 +115,6 @@ where
             let mut handles: Vec<JoinHandle<Result<()>>> = vec![];
 
             for (topic, messages) in messages {
-                let messages = messages
-                    .into_iter()
-                    .map(|m| Message {
-                        key: m.key().map(|data| String::from_utf8_lossy(data).to_string()),
-                        value: m
-                            .payload()
-                            .map(|data| String::from_utf8_lossy(data).to_string())
-                            .unwrap(),
-                    })
-                    .collect();
                 let handler = handlers.get(topic.as_str()).unwrap();
                 let handler = Arc::clone(handler);
                 let state = state.clone();
@@ -144,6 +128,25 @@ where
             consumer.commit_consumer_state(CommitMode::Async)?;
         }
     }
+}
+
+fn convert_messages<P>(messages: Vec<BorrowedMessage<'_>>) -> Result<Vec<Message<P>>>
+where
+    P: DeserializeOwned,
+{
+    messages
+        .into_iter()
+        .map(|message| {
+            let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
+            let payload = message
+                .payload()
+                .map(|data| String::from_utf8_lossy(data).to_string())
+                .context("there is no payload")?;
+
+            let value = from_json(&payload)?;
+            Ok(Message { key, value })
+        })
+        .collect()
 }
 
 fn poll_messages(
