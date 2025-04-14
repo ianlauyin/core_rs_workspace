@@ -11,6 +11,7 @@ use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
 use tracing::error;
+use tracing::field;
 use tracing::info;
 use tracing::info_span;
 use tracing::warn;
@@ -25,17 +26,21 @@ async fn main() {
 }
 
 async fn test_action() {
-    log::start_action("some-action", async {
+    log::start_action("some-action", None, async {
         let x = Arc::new(Mutex::new(1));
         let y = x.clone();
 
-        task::spawn_action("some-action:task", async move {
+        debug!(key = "value1", key2 = "value2", "context");
+
+        task::spawn_action("some-task", async move {
             *y.lock().unwrap() = 2;
             warn!("y = {y:?}");
             Ok(())
         });
 
-        warn!("after task, {x:?}");
+        debug!(key3 = "value3", "context");
+
+        warn!("after task, {}", x.lock().unwrap());
         handle_request(false).await?;
         Ok(())
     })
@@ -43,17 +48,19 @@ async fn test_action() {
 }
 
 async fn handle_request(success: bool) -> Result<()> {
-    let span = info_span!("http", some_thing = "some");
-    span.in_scope(|| {
+    let span = info_span!("http", elapsed = field::Empty);
+    async {
         info!(request_id = 123, "Processing request,");
-    });
+    }
+    .instrument(span)
+    .await;
 
     async {
         info!("inside async block");
     }
     .await;
 
-    let db_span = debug_span!("db");
+    let db_span = debug_span!("db", elapsed = field::Empty);
     async {
         debug!(sql = "select 1", "run db query,");
     }

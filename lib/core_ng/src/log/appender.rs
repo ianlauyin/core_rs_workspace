@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::fmt::Write;
+use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -10,6 +12,7 @@ pub struct ActionLogMessage {
     pub date: DateTime<Utc>,
     pub action: String,
     pub result: &'static str,
+    pub context: HashMap<String, String>,
     pub trace: Option<String>,
     pub elapsed: u128,
 }
@@ -20,29 +23,29 @@ pub trait ActionLogAppender {
 
 pub struct ConsoleAppender;
 
-const RED: &str = "\x1b[31m";
-const CYAN: &str = "\x1b[36m";
-const RESET: &str = "\x1b[0m";
-
 impl ActionLogAppender for ConsoleAppender {
     fn append(&self, action_log: ActionLogMessage) {
         let mut log = String::new();
         write!(
             log,
-            "{CYAN}{} | {} | elapsed={}ms | id={} | action={}{RESET}",
+            "{} | {} | elapsed={:?} | id={} | action={}",
             action_log.date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             action_log.result,
-            action_log.elapsed / 1_000_000,
+            Duration::from_nanos(action_log.elapsed as u64),
             action_log.id,
             action_log.action
         )
         .unwrap();
 
+        for (key, value) in action_log.context {
+            write!(log, " | {key}={value}").unwrap();
+        }
+
         println!("{log}");
 
         if action_log.result != "Ok" {
             if let Some(trace) = action_log.trace {
-                eprintln!("{RED}{trace}{RESET}");
+                eprintln!("{trace}");
             }
         }
     }
