@@ -12,6 +12,7 @@ pub struct ActionLogMessage {
     pub date: DateTime<Utc>,
     pub action: String,
     pub result: &'static str,
+    pub ref_id: Option<String>,
     pub context: HashMap<String, String>,
     pub trace: Option<String>,
     pub elapsed: u128,
@@ -36,6 +37,10 @@ impl ActionLogAppender for ConsoleAppender {
             action_log.action
         )
         .unwrap();
+
+        if let Some(ref_id) = action_log.ref_id {
+            write!(log, " | ref_id={ref_id}").unwrap();
+        }
 
         for (key, value) in action_log.context {
             write!(log, " | {key}={value}").unwrap();

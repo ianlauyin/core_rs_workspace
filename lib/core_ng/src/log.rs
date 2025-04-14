@@ -304,10 +304,11 @@ fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
     }
 
     ActionLogMessage {
-        id: action_log.id.to_string(),
+        id: action_log.id,
         date: action_log.date,
-        action: action_log.action.to_string(),
+        action: action_log.action,
         result: action_log.result.as_str(),
+        ref_id: action_log.ref_id,
         context: action_log.context,
         trace,
         elapsed: elapsed.as_nanos(),
@@ -317,6 +318,10 @@ fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
 struct LogVisitor<'a>(&'a mut String);
 
 impl Visit for LogVisitor<'_> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.0.push_str(format!("{}={} ", field.name(), value).as_str());
+    }
+
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
             self.0.push_str(format!("{:?} ", value).as_str());

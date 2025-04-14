@@ -11,5 +11,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 axum.workspace = true
 rdkafka.workspace = true
