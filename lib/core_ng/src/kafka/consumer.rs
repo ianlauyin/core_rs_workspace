@@ -14,6 +14,7 @@ use rdkafka::consumer::BaseConsumer;
 use rdkafka::consumer::CommitMode;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::BorrowedMessage;
+use rdkafka::message::Headers;
 use rdkafka::util::Timeout;
 use serde::de::DeserializeOwned;
 use tokio::sync::broadcast::Receiver;
@@ -29,6 +30,7 @@ use crate::log;
 pub struct Message<T: DeserializeOwned> {
     pub key: Option<String>,
     value: String,
+    pub headers: HashMap<String, String>,
     _marker: PhantomData<T>,
 }
 
@@ -181,7 +183,9 @@ where
                 }
 
                 for handle in handles {
-                    handle.await.unwrap();
+                    if let Err(e) = handle.await {
+                        error!(error = ?e, "failed to join handle");
+                    }
                 }
 
                 consumer.commit_consumer_state(CommitMode::Async)?;
@@ -195,14 +199,28 @@ where
     }
 }
 
-impl<P: DeserializeOwned> From<BorrowedMessage<'_>> for Message<P> {
-    fn from(message: BorrowedMessage<'_>) -> Message<P> {
+impl<T: DeserializeOwned> From<BorrowedMessage<'_>> for Message<T> {
+    fn from(message: BorrowedMessage<'_>) -> Message<T> {
         let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
         let value = message.payload().map(|data| String::from_utf8_lossy(data).to_string());
+
+        let mut headers = HashMap::new();
+        if let Some(kafka_headers) = message.headers() {
+            for kafka_header in kafka_headers.iter() {
+                headers.insert(
+                    kafka_header.key.to_owned(),
+                    kafka_header
+                        .value
+                        .map(|data| String::from_utf8_lossy(data).to_string())
+                        .unwrap_or_default(),
+                );
+            }
+        }
 
         Message {
             key,
             value: value.unwrap_or_default(),
+            headers,
             _marker: PhantomData,
         }
     }
@@ -240,8 +258,12 @@ where
     Fut: Future<Output = Result<()>> + Send + Sync + 'static,
     M: DeserializeOwned,
 {
-    log::start_action(format!("topic:{topic}"), None, async {
+    let ref_id = message.headers.get("ref_id").map(|value| value.to_owned());
+    log::start_action(format!("topic:{topic}"), ref_id, async {
         debug!("[message] key={:?}, value={}", message.key, message.value);
+        for (key, value) in message.headers.iter() {
+            debug!("[header] {}={}", key, value);
+        }
         handler(state, message).await
     })
     .await;

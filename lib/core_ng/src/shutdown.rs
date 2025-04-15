@@ -1,11 +1,10 @@
 use tokio::signal;
 use tokio::signal::unix::SignalKind;
-use tokio::sync::broadcast::Sender;
-use tokio::sync::broadcast::{self};
+use tokio::sync::broadcast;
 use tracing::info;
 
 pub struct Shutdown {
-    signal: Sender<()>,
+    signal: broadcast::Sender<()>,
 }
 
 impl Default for Shutdown {
