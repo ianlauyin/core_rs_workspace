@@ -26,7 +26,7 @@ async fn main() {
 }
 
 async fn test_action() {
-    log::start_action("some-action", None, async {
+    log::start_action("some-action".to_string(), None, async {
         let x = Arc::new(Mutex::new(1));
         let y = x.clone();
 

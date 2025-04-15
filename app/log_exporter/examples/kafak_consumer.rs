@@ -1,19 +1,18 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use anyhow::anyhow;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::Message;
 use core_ng::kafka::consumer::MessageConsumer;
 use core_ng::kafka::producer::Producer;
 use core_ng::kafka::producer::ProducerConfig;
 use core_ng::kafka::topic::Topic;
+use core_ng::log;
+use core_ng::log::appender::ConsoleAppender;
 use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::Layer;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestMessage {
@@ -32,15 +31,7 @@ struct Topics {
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .compact()
-                .with_line_number(true)
-                .with_thread_ids(true)
-                .with_filter(LevelFilter::INFO),
-        )
-        .init();
+    log::init(ConsoleAppender);
 
     let state = State {
         topics: Topics {
@@ -70,18 +61,19 @@ pub async fn main() -> Result<()> {
 async fn handler(_state: Arc<State>, messages: Vec<Message<TestMessage>>) -> Result<()> {
     println!("count => {}", messages.len());
     for message in messages {
-        println!("Received bulk message: {}", message.value.name);
+        println!("Received bulk message: {}", message.value()?.name);
     }
-    Ok(())
+    Err(anyhow!("String"))
 }
 
 async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
-    println!("Received single message: {}", message.value.name);
+    println!("Received single message: {}", message.value()?.name);
 
-    if let Some(key) = message.key {
+    if let Some(ref key) = message.key {
         if key == "1" {
-            state.producer.send(&state.topics.test, None, &message.value).await?;
-            state.producer.send(&state.topics.test, None, &message.value).await?;
+            let value = message.value()?;
+            state.producer.send(&state.topics.test, None, &value).await?;
+            state.producer.send(&state.topics.test, None, &value).await?;
         }
     }
 

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,34 +18,36 @@ use rdkafka::util::Timeout;
 use serde::de::DeserializeOwned;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
+use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use super::topic::Topic;
 use crate::json::from_json;
+use crate::log;
 
-pub struct Message<P: DeserializeOwned> {
+pub struct Message<T: DeserializeOwned> {
     pub key: Option<String>,
-    pub value: P,
+    value: String,
+    _marker: PhantomData<T>,
+}
+
+impl<T: DeserializeOwned> Message<T> {
+    pub fn value(&self) -> Result<T> {
+        from_json(&self.value)
+    }
 }
 
 trait MessageHandler<S>: Send + Sync {
-    fn handle(
-        &self,
-        state: Arc<S>,
-        messages: Vec<BorrowedMessage<'_>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage<'_>>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 impl<F, Fut, S> MessageHandler<S> for F
 where
     F: Fn(Arc<S>, Vec<BorrowedMessage<'_>>) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + Sync + 'static,
 {
-    fn handle(
-        &self,
-        state: Arc<S>,
-        messages: Vec<BorrowedMessage<'_>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage<'_>>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(self(state, messages))
     }
 }
@@ -97,6 +100,7 @@ where
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
         M: DeserializeOwned + Send + Sync + 'static,
     {
+        let topic = topic.name;
         let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
             let mut message_groups: HashMap<Option<String>, Vec<Message<M>>> = HashMap::new();
             for message in messages {
@@ -112,40 +116,44 @@ where
                     if key.is_none() {
                         for message in messages {
                             let state = Arc::clone(&state);
-                            handles.push(tokio::spawn(handler(state, message)));
+                            let handler = handler.clone();
+                            handles.push(tokio::spawn(handle_message(state, message, topic.to_owned(), handler)));
                         }
                     } else {
                         handles.push(tokio::spawn(async move {
                             for message in messages {
                                 let state = Arc::clone(&state);
-                                handler(state, message).await?;
+                                let handler = handler.clone();
+                                handle_message(state, message, topic.to_owned(), handler).await;
                             }
-                            Ok(())
                         }));
                     }
                 }
                 for handle in handles {
-                    handle.await??;
+                    if let Err(e) = handle.await {
+                        error!(error = ?e, "failed to join handle");
+                    }
                 }
-                Ok(())
             }
         };
 
-        self.handlers.insert(topic.name, Box::new(handler));
+        self.handlers.insert(topic, Box::new(handler));
     }
 
     pub fn add_bulk_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
-        H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Send + Sync + 'static,
+        H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<()>> + Send + Sync + 'static,
-        M: DeserializeOwned,
+        M: DeserializeOwned + Send + Sync + 'static,
     {
-        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
-            let messages = messages.into_iter().map(From::from).collect();
-            handler(state, messages)
+        let topic = topic.name;
+        let bulk_handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
+            let messages: Vec<Message<M>> = messages.into_iter().map(From::from).collect();
+            let handler = handler.clone();
+            handle_bulk_messages(state, messages, topic.to_owned(), handler)
         };
 
-        self.handlers.insert(topic.name, Box::new(handler));
+        self.handlers.insert(topic, Box::new(bulk_handler));
     }
 
     pub async fn start(self, state: S, mut shutdown_signel: Receiver<()>) -> Result<()> {
@@ -162,7 +170,7 @@ where
             let messages = poll_messages(&consumer, self.poll_max_wait_time, self.poll_max_records)?;
 
             if !messages.is_empty() {
-                let mut handles: Vec<JoinHandle<Result<()>>> = vec![];
+                let mut handles: Vec<JoinHandle<()>> = vec![];
 
                 for (topic, messages) in messages {
                     if let Some(handler) = handlers.get(topic.as_str()) {
@@ -173,7 +181,7 @@ where
                 }
 
                 for handle in handles {
-                    handle.await??;
+                    handle.await.unwrap();
                 }
 
                 consumer.commit_consumer_state(CommitMode::Async)?;
@@ -192,8 +200,11 @@ impl<P: DeserializeOwned> From<BorrowedMessage<'_>> for Message<P> {
         let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
         let value = message.payload().map(|data| String::from_utf8_lossy(data).to_string());
 
-        let value = value.map(|v| from_json(&v).unwrap()).unwrap();
-        Message { key, value }
+        Message {
+            key,
+            value: value.unwrap_or_default(),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -221,4 +232,32 @@ fn poll_messages(
         }
     }
     Ok(messages)
+}
+
+async fn handle_message<H, S, M, Fut>(state: Arc<S>, message: Message<M>, topic: String, handler: H)
+where
+    H: Fn(Arc<S>, Message<M>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+    M: DeserializeOwned,
+{
+    log::start_action(format!("topic:{topic}"), None, async {
+        debug!("[message] key={:?}, value={}", message.key, message.value);
+        handler(state, message).await
+    })
+    .await;
+}
+
+async fn handle_bulk_messages<H, S, M, Fut>(state: Arc<S>, messages: Vec<Message<M>>, topic: String, handler: H)
+where
+    H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+    M: DeserializeOwned,
+{
+    log::start_action(format!("topic:{topic}"), None, async {
+        for message in messages.iter() {
+            debug!("[message] key={:?}, value={}", message.key, message.value);
+        }
+        handler(state, messages).await
+    })
+    .await;
 }

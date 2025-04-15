@@ -16,7 +16,7 @@ pub async fn main() -> Result<()> {
         bootstrap_servers: "dev.internal:9092",
     });
 
-    let topic = Topic::new("test_single");
+    let topic = Topic::new("test");
 
     for i in 1..100 {
         producer

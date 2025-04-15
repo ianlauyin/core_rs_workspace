@@ -21,7 +21,7 @@ where
     let ref_id = CURRENT_ACTION_ID
         .try_with(|current_action_id| Some(current_action_id.clone()))
         .unwrap_or(None);
-    TASK_TRACKER.spawn(async move { log::start_action(action.as_str(), ref_id, task).await });
+    TASK_TRACKER.spawn(async move { log::start_action(action, ref_id, task).await });
 }
 
 pub fn spawn_task<T>(task: T) -> JoinHandle<Result<()>>

@@ -50,7 +50,7 @@ task_local! {
     pub(crate) static CURRENT_ACTION_ID: String
 }
 
-pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
+pub async fn start_action<T>(action: String, ref_id: Option<String>, task: T)
 where
     T: Future<Output = Result<()>>,
 {
