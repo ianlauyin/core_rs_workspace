@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Write;
+use std::thread;
 use std::time::Instant;
 
 use anyhow::Result;
@@ -13,13 +14,13 @@ use tracing::Event;
 use tracing::Instrument;
 use tracing::Level;
 use tracing::Subscriber;
+use tracing::error;
 use tracing::field::Field;
 use tracing::field::Visit;
 use tracing::info_span;
 use tracing::level_filters::LevelFilter;
 use tracing::span::Attributes;
 use tracing::span::Id;
-use tracing::warn;
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::SubscriberExt;
@@ -50,7 +51,7 @@ task_local! {
     pub(crate) static CURRENT_ACTION_ID: String
 }
 
-pub async fn start_action<T>(action: String, ref_id: Option<String>, task: T)
+pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
 where
     T: Future<Output = Result<()>>,
 {
@@ -62,7 +63,7 @@ where
             async {
                 let result = task.await;
                 if let Err(e) = result {
-                    warn!("{}\n{}", e, e.backtrace());
+                    error!("{}\n{}", e, e.backtrace());
                 }
             }
             .instrument(action_span),
@@ -131,10 +132,12 @@ where
                         r#"=== action begin ===
 action={}
 id={}
-date={}"#,
+date={}
+thread={:?}"#,
                         action_log.action,
                         action_log.id,
-                        action_log.date.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
+                        action_log.date.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                        thread::current().id()
                     ));
 
                     if let Some(ref ref_id) = action_log.ref_id {
@@ -170,6 +173,10 @@ date={}"#,
     }
 
     fn on_event(&self, event: &Event<'_>, context: Context<'_, S>) {
+        if event.metadata().level() == &Level::TRACE {
+            return;
+        }
+
         let mut action_span: Option<SpanRef<'_, S>> = None;
         let mut spans = String::new();
 

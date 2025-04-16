@@ -13,7 +13,7 @@ async fn main() {
 }
 
 async fn test() {
-    log::start_action("test_http_client".to_string(), None, async {
+    log::start_action("test_http_client", None, async {
         let http_client = HttpClient::default();
         let mut request = HttpRequest::new(POST, "https://www.ubgame.dev".to_string());
         request.body = Some("{some json}".to_string());

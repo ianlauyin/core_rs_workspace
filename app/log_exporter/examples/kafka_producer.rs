@@ -16,9 +16,9 @@ pub async fn main() -> Result<()> {
         bootstrap_servers: "dev.internal:9092",
     });
 
-    let topic = Topic::new("test");
+    let topic = Topic::new("test_single");
 
-    for i in 1..100 {
+    for i in 1..10 {
         producer
             .send(&topic, Some(i.to_string()), &TestMessage { name: format!("{i}") })
             .await?;
