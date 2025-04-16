@@ -10,7 +10,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::log;
-use crate::log::CURRENT_ACTION_ID;
+use crate::log::current_action_id;
 
 static TASK_TRACKER: LazyLock<TaskTracker> = LazyLock::new(TaskTracker::new);
 
@@ -18,9 +18,7 @@ pub fn spawn_action<T>(name: &'static str, task: T)
 where
     T: Future<Output = Result<()>> + Send + 'static,
 {
-    let ref_id = CURRENT_ACTION_ID
-        .try_with(|current_action_id| Some(current_action_id.clone()))
-        .unwrap_or(None);
+    let ref_id = current_action_id();
     TASK_TRACKER.spawn(async move {
         log::start_action("task", ref_id, async {
             debug!(task = name, "context");

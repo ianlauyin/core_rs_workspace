@@ -19,7 +19,7 @@ pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::R
     let app = Router::new();
     let app = app.route("/health-check", get(health_check));
     let app = app.merge(router);
-    let app = app.layer(middleware::from_fn(action_layer));
+    let app = app.layer(middleware::from_fn(action_log_layer));
 
     let listener = TcpListener::bind("127.0.0.1:3000").await?;
     info!("http server stated");
@@ -37,7 +37,7 @@ async fn health_check() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-async fn action_layer(request: Request, next: Next) -> Response {
+async fn action_log_layer(request: Request, next: Next) -> Response {
     let mut response = None;
     log::start_action("http", None, async {
         let method = request.method();

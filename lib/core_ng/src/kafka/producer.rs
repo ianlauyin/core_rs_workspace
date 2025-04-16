@@ -14,8 +14,10 @@ use tracing::debug_span;
 use tracing::field;
 
 use super::topic::Topic;
+use crate::env;
 use crate::json::to_json;
-use crate::log::CURRENT_ACTION_ID;
+use crate::log::current_action_id;
+use crate::time::current_time_millis;
 
 pub struct ProducerConfig {
     pub bootstrap_servers: &'static str,
@@ -43,21 +45,21 @@ impl Producer {
         let span = debug_span!("kafka", elapsed = field::Empty);
         async {
             let payload = to_json(message)?;
-            let mut record = FutureRecord::<String, String>::to(topic.name).payload(&payload);
+
+            let mut record = FutureRecord::<String, String>::to(topic.name)
+                .timestamp(current_time_millis() as i64)
+                .payload(&payload);
+
             if let Some(ref key) = key {
                 record = record.key(key);
             }
-            let ref_id = CURRENT_ACTION_ID
-                .try_with(|current_action_id| Some(current_action_id.clone()))
-                .unwrap_or(None);
-            if let Some(ref_id) = ref_id {
-                let headers = OwnedHeaders::new();
-                let headers = headers.insert(Header {
-                    key: "ref_id",
-                    value: Some(ref_id.as_bytes()),
-                });
-                record = record.headers(headers);
+
+            let mut headers = insert_header(OwnedHeaders::new(), "client", env::APP_NAME);
+            if let Some(ref ref_id) = current_action_id() {
+                headers = insert_header(headers, "ref_id", ref_id);
             }
+            record = record.headers(headers);
+
             debug!(key, payload, "send");
             let result = self.producer.send(record, Timeout::Never).await;
             if let Err((err, _)) = result {
@@ -68,4 +70,11 @@ impl Producer {
         .instrument(span)
         .await
     }
+}
+
+fn insert_header(headers: OwnedHeaders, key: &str, value: &str) -> OwnedHeaders {
+    headers.insert(Header {
+        key,
+        value: Some(value.as_bytes()),
+    })
 }

@@ -6,8 +6,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use chrono::DateTime;
+use chrono::SecondsFormat;
+use chrono::Utc;
 use rdkafka::ClientConfig;
 use rdkafka::Message as _;
+use rdkafka::Timestamp;
 use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::consumer::Consumer;
@@ -21,13 +25,16 @@ use tracing::debug;
 use tracing::info;
 
 use super::topic::Topic;
+use crate::env;
 use crate::json::from_json;
 use crate::log;
+use crate::time::duration;
 
 pub struct Message<T: DeserializeOwned> {
     pub key: Option<String>,
     payload: String,
     pub headers: HashMap<String, String>,
+    pub timestamp: Option<DateTime<Utc>>,
     _marker: PhantomData<T>,
 }
 
@@ -59,7 +66,7 @@ pub struct ConsumerConfig {
 impl Default for ConsumerConfig {
     fn default() -> Self {
         Self {
-            group_id: env!("CARGO_PKG_NAME"),
+            group_id: env::APP_NAME,
             bootstrap_servers: "localhost:9092",
         }
     }
@@ -153,10 +160,16 @@ impl<T: DeserializeOwned> From<BorrowedMessage<'_>> for Message<T> {
             }
         }
 
+        let timestamp = match message.timestamp() {
+            Timestamp::CreateTime(time) => DateTime::from_timestamp_millis(time),
+            _ => None,
+        };
+
         Message {
             key,
             payload: value.unwrap_or_default(),
             headers,
+            timestamp,
             _marker: PhantomData,
         }
     }
@@ -172,11 +185,20 @@ where
     log::start_action("kafka", ref_id, async {
         debug!(topic, "[message]");
         debug!(key = ?message.key, "[message]");
+        debug!(
+            timestamp = message
+                .timestamp
+                .map(|t| t.to_rfc3339_opts(SecondsFormat::Millis, true)),
+            "[message]"
+        );
         debug!(payload = message.payload, "[message]");
         for (key, value) in message.headers.iter() {
             debug!("[header] {}={}", key, value);
         }
         debug!(topic, key = message.key, "context");
+        if let Some(timestamp) = message.timestamp {
+            debug!("lag={:?}", duration(Utc::now(), timestamp));
+        }
         handler(state, message).await
     })
     .await;

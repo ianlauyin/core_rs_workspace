@@ -24,6 +24,10 @@ pub trait ActionLogAppender {
     fn append(&self, action_log: ActionLogMessage);
 }
 
+task_local! {
+    static CURRENT_ACTION_ID: String
+}
+
 pub fn init<T>(appender: T)
 where
     T: ActionLogAppender + Send + Sync + 'static,
@@ -38,10 +42,6 @@ where
                 .with_filter(LevelFilter::INFO),
         )
         .init();
-}
-
-task_local! {
-    pub(crate) static CURRENT_ACTION_ID: String
 }
 
 pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
@@ -62,6 +62,12 @@ where
             .instrument(action_span),
         )
         .await;
+}
+
+pub fn current_action_id() -> Option<String> {
+    CURRENT_ACTION_ID
+        .try_with(|current_action_id| Some(current_action_id.clone()))
+        .unwrap_or(None)
 }
 
 #[derive(Serialize, Debug)]
