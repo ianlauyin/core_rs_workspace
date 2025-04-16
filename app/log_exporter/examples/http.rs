@@ -2,7 +2,7 @@ use core_ng::http_client::HttpClient;
 use core_ng::http_client::HttpMethod::POST;
 use core_ng::http_client::HttpRequest;
 use core_ng::log;
-use core_ng::log::appender::ConsoleAppender;
+use core_ng::log::ConsoleAppender;
 use tracing::warn;
 
 #[tokio::main]

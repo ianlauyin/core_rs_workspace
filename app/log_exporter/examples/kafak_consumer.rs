@@ -8,7 +8,7 @@ use core_ng::kafka::producer::Producer;
 use core_ng::kafka::producer::ProducerConfig;
 use core_ng::kafka::topic::Topic;
 use core_ng::log;
-use core_ng::log::appender::ConsoleAppender;
+use core_ng::log::ConsoleAppender;
 use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
@@ -21,7 +21,7 @@ struct TestMessage {
 
 struct State {
     topics: Topics,
-    _producer: Producer,
+    producer: Producer,
 }
 
 struct Topics {
@@ -36,7 +36,7 @@ pub async fn main() -> Result<()> {
         topics: Topics {
             test_single: Topic::new("test_single"),
         },
-        _producer: Producer::new(ProducerConfig {
+        producer: Producer::new(ProducerConfig {
             bootstrap_servers: "dev.internal:9092",
         }),
     };
@@ -54,13 +54,19 @@ pub async fn main() -> Result<()> {
     consumer.start(state, signal).await
 }
 
-async fn handler_single(_state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
+async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
     println!("Received single message: {}", message.payload()?.name);
 
     if let Some(ref key) = message.key {
         if key == "1" {
             let value = message.payload()?;
+            state
+                .producer
+                .send(&state.topics.test_single, Some("xxx".to_string()), &value)
+                .await?;
             warn!("test: {value:?}");
+        } else if key == "xxx" {
+            warn!("test");
         }
     }
 

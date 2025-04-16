@@ -30,14 +30,13 @@ where
     serde_json::to_string(object).with_context(|| format!("failed to serialize, object={object:?}"))
 }
 
-pub fn to_json_value<T>(enum_value: &T) -> Result<String>
+pub fn to_json_value<T>(enum_value: &T) -> String
 where
     T: Serialize + Debug,
 {
-    let value = serde_json::to_string(enum_value).with_context(|| format!("enum={enum_value:?}"))?;
-    Ok(value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-        .map(|value| value.to_string())
-        .unwrap_or(value))
+    if let Ok(value) = serde_json::to_string(enum_value) {
+        value[1..value.len() - 1].to_string()
+    } else {
+        Default::default()
+    }
 }

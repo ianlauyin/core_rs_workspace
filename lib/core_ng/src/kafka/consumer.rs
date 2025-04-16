@@ -169,14 +169,14 @@ where
     M: DeserializeOwned,
 {
     let ref_id = message.headers.get("ref_id").map(|value| value.to_owned());
-    log::start_action(format!("topic:{topic}").as_str(), ref_id, async {
+    log::start_action("kafka", ref_id, async {
         debug!(topic, "[message]");
         debug!(key = ?message.key, "[message]");
         debug!(payload = message.payload, "[message]");
-        debug!(topic, key = message.key, "context");
         for (key, value) in message.headers.iter() {
             debug!("[header] {}={}", key, value);
         }
+        debug!(topic, key = message.key, "context");
         handler(state, message).await
     })
     .await;

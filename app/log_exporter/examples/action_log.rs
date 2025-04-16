@@ -3,8 +3,8 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use core_ng::log::appender::ConsoleAppender;
-use core_ng::log::{self};
+use core_ng::log;
+use core_ng::log::ConsoleAppender;
 use core_ng::task;
 use tokio::task::yield_now;
 use tracing::Instrument;

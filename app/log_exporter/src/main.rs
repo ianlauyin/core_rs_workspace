@@ -1,12 +1,10 @@
 use anyhow::Result;
 use axum::Router;
+use core_ng::log;
+use core_ng::log::ConsoleAppender;
 use core_ng::shutdown::Shutdown;
 use core_ng::task;
 use core_ng::web::server::start_http_server;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::Layer;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use web::upload;
 
 pub mod web;
@@ -16,13 +14,7 @@ pub struct ApiState {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .compact()
-                .with_filter(LevelFilter::INFO),
-        )
-        .init();
+    log::init(ConsoleAppender);
 
     let mut args = std::env::args();
     if let Some(conf) = args.nth(1) {
