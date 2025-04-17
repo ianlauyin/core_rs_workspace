@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use axum::Json;
 use axum::Router;
 use axum::debug_handler;
 use axum::extract::Path;
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::routing::put;
@@ -12,7 +15,7 @@ use tracing::warn;
 
 use crate::ApiState;
 
-pub fn routes() -> Router<ApiState> {
+pub fn routes() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/upload", put(upload))
         .route("/customer/{id}", get(get_customer))
@@ -28,7 +31,7 @@ async fn upload(Json(request): Json<UploadRequest>) -> Result<StatusCode, HttpEr
 }
 
 #[debug_handler]
-async fn get_customer(Path(id): Path<String>) -> Json<UploadRequest> {
-    warn!("testm, id={id}");
+async fn get_customer(State(state): State<Arc<ApiState>>, Path(id): Path<String>) -> Json<UploadRequest> {
+    warn!("test, id={id}, state={}", state.name);
     Json::from(UploadRequest {})
 }

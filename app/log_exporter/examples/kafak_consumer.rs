@@ -13,6 +13,7 @@ use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestMessage {
@@ -33,8 +34,8 @@ struct Topics {
 pub async fn main() -> Result<()> {
     log::init_with_action(ConsoleAppender);
 
-    let (tx, mut rx) = mpsc::channel::<TestMessage>(1000);
-    let state = State {
+    let (tx, rx) = mpsc::channel::<TestMessage>(1000);
+    let state = Arc::new(State {
         topics: Topics {
             test_single: Topic::new("test_single"),
         },
@@ -42,18 +43,13 @@ pub async fn main() -> Result<()> {
             bootstrap_servers: "dev.internal:9092",
         }),
         tx,
-    };
+    });
 
     let shutdown = Shutdown::new();
     let signal = shutdown.subscribe();
     shutdown.listen();
 
-    let handle = tokio::spawn(async move {
-        while let Some(message) = rx.recv().await {
-            println!("Received message: {}", message.name);
-        }
-        println!("finished");
-    });
+    let handle = tokio::spawn(process_message(rx));
 
     let mut consumer = MessageConsumer::new(ConsumerConfig {
         group_id: "log-exporter",
@@ -82,4 +78,16 @@ async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Res
         }
     }
     Ok(())
+}
+
+async fn process_message(mut rx: Receiver<TestMessage>) {
+    let mut buffer = Vec::with_capacity(1000);
+
+    while rx.recv_many(&mut buffer, 1000).await != 0 {
+        for message in buffer.drain(..) {
+            println!("Received message: {}", message.name);
+        }
+    }
+
+    println!("finished");
 }

@@ -119,9 +119,7 @@ where
         self.handlers.insert(topic, Box::new(handler));
     }
 
-    pub async fn start(self, state: S, mut shutdown_signel: Receiver<()>) -> Result<()> {
-        let state = Arc::new(state);
-
+    pub async fn start(self, state: Arc<S>, mut shutdown_signel: Receiver<()>) -> Result<()> {
         let handlers = &self.handlers;
         let consumer: BaseConsumer = self.config.create()?;
         let topics: Vec<&str> = handlers.keys().cloned().collect();

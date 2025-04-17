@@ -1,6 +1,6 @@
 pub mod env;
 pub mod fs;
-pub mod http_client;
+pub mod http;
 pub mod json;
 pub mod kafka;
 pub mod log;

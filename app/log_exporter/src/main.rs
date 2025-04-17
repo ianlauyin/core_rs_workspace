@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use axum::Router;
 use core_ng::log;
@@ -9,8 +11,9 @@ use web::upload;
 
 pub mod web;
 
-#[derive(Clone)]
-pub struct ApiState {}
+pub struct ApiState {
+    name: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,7 +28,9 @@ async fn main() -> Result<()> {
     let signal = shutdown.subscribe();
     shutdown.listen();
 
-    let state = ApiState {};
+    let state = Arc::new(ApiState {
+        name: "test".to_string(),
+    });
 
     let app = Router::new();
     let app = app.merge(upload::routes());

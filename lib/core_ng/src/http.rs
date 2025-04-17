@@ -74,7 +74,7 @@ impl HttpResponse {
 }
 
 impl HttpClient {
-    pub async fn execute(&self, request: HttpRequest) -> anyhow::Result<HttpResponse> {
+    pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse> {
         let span = debug_span!("http", elapsed = field::Empty);
         async {
             debug!(method = ?request.method, "[request]");
