@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Result;
 use chrono::DateTime;
@@ -14,14 +15,15 @@ use rdkafka::Message as _;
 use rdkafka::Timestamp;
 use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::BaseConsumer;
+use rdkafka::consumer::CommitMode;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::BorrowedMessage;
 use rdkafka::message::Headers;
 use rdkafka::util::Timeout;
 use serde::de::DeserializeOwned;
 use tokio::sync::broadcast::Receiver;
-use tokio_util::task::TaskTracker;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use super::topic::Topic;
@@ -61,6 +63,8 @@ where
 pub struct ConsumerConfig {
     pub group_id: &'static str,
     pub bootstrap_servers: &'static str,
+    pub poll_max_wait_time: Duration,
+    pub poll_max_records: usize,
 }
 
 impl Default for ConsumerConfig {
@@ -68,6 +72,8 @@ impl Default for ConsumerConfig {
         Self {
             group_id: env::APP_NAME,
             bootstrap_servers: "localhost:9092",
+            poll_max_wait_time: Duration::from_secs(1),
+            poll_max_records: 1000,
         }
     }
 }
@@ -75,7 +81,8 @@ impl Default for ConsumerConfig {
 pub struct MessageConsumer<S> {
     config: ClientConfig,
     handlers: HashMap<&'static str, Box<dyn MessageHandler<S>>>,
-    tasks: TaskTracker,
+    poll_max_wait_time: Duration,
+    poll_max_records: usize,
 }
 
 impl<S> MessageConsumer<S>
@@ -87,11 +94,12 @@ where
             config: ClientConfig::new()
                 .set("group.id", config.group_id)
                 .set("bootstrap.servers", config.bootstrap_servers)
-                .set("enable.auto.commit", "true")
+                .set("enable.auto.commit", "false")
                 .set_log_level(RDKafkaLogLevel::Info)
                 .to_owned(),
             handlers: HashMap::new(),
-            tasks: TaskTracker::new(),
+            poll_max_wait_time: config.poll_max_wait_time,
+            poll_max_records: config.poll_max_records,
         }
     }
 
@@ -122,19 +130,30 @@ where
         info!("kakfa consumer started, topics={:?}", topics);
 
         loop {
-            if let Some(result) = consumer.poll(Timeout::After(Duration::from_millis(500))) {
-                let message = result?;
-                let topic = message.topic().to_owned();
-
-                if let Some(handler) = handlers.get(topic.as_str()) {
-                    self.tasks.spawn(handler.handle(state.clone(), message));
+            let messages = poll_messages(&consumer, self.poll_max_wait_time, self.poll_max_records);
+            match messages {
+                Ok(messages) => {
+                    let mut handles = Vec::with_capacity(messages.len());
+                    for message in messages {
+                        let topic = message.topic();
+                        if let Some(handler) = handlers.get(topic) {
+                            handles.push(tokio::spawn(handler.handle(state.clone(), message)));
+                        }
+                    }
+                    for handle in handles {
+                        handle.await.unwrap();
+                    }
+                    if let Err(e) = consumer.commit_consumer_state(CommitMode::Async) {
+                        error!(error = ?e, "failed to commit messages");
+                    }
+                }
+                Err(e) => {
+                    error!(error = ?e, "failed to poll messages");
+                    tokio::time::sleep(Duration::from_secs(5)).await
                 }
             }
 
             if shutdown_signel.try_recv().is_ok() {
-                self.tasks.close();
-                self.tasks.wait().await;
-
                 info!("kakfa consumer stopped, topics={:?}", topics);
                 return Ok(());
             }
@@ -173,6 +192,31 @@ impl<T: DeserializeOwned> From<BorrowedMessage<'_>> for Message<T> {
             _marker: PhantomData,
         }
     }
+}
+
+fn poll_messages(
+    consumer: &'_ BaseConsumer,
+    max_wait_time: Duration,
+    max_records: usize,
+) -> Result<Vec<BorrowedMessage<'_>>> {
+    let mut messages = vec![];
+    let start_time = Instant::now();
+    loop {
+        let elapsed = start_time.elapsed();
+        if elapsed >= max_wait_time {
+            break;
+        }
+
+        if messages.len() >= max_records {
+            break;
+        }
+
+        if let Some(result) = consumer.poll(Timeout::After(max_wait_time.saturating_sub(elapsed))) {
+            let message = result?;
+            messages.push(message);
+        }
+    }
+    Ok(messages)
 }
 
 async fn handle_message<H, S, M, Fut>(topic: &str, message: Message<M>, handler: H, state: Arc<S>)
