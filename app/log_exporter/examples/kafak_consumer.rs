@@ -12,7 +12,7 @@ use core_ng::log::ConsoleAppender;
 use core_ng::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::warn;
+use tokio::sync::mpsc;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestMessage {
@@ -22,6 +22,7 @@ struct TestMessage {
 struct State {
     topics: Topics,
     producer: Producer,
+    tx: mpsc::Sender<TestMessage>,
 }
 
 struct Topics {
@@ -30,8 +31,9 @@ struct Topics {
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    log::init(ConsoleAppender);
+    log::init_with_action(ConsoleAppender);
 
+    let (tx, mut rx) = mpsc::channel::<TestMessage>(1000);
     let state = State {
         topics: Topics {
             test_single: Topic::new("test_single"),
@@ -39,11 +41,19 @@ pub async fn main() -> Result<()> {
         producer: Producer::new(ProducerConfig {
             bootstrap_servers: "dev.internal:9092",
         }),
+        tx,
     };
 
     let shutdown = Shutdown::new();
     let signal = shutdown.subscribe();
     shutdown.listen();
+
+    let handle = tokio::spawn(async move {
+        while let Some(message) = rx.recv().await {
+            println!("Received message: {}", message.name);
+        }
+        println!("finished");
+    });
 
     let mut consumer = MessageConsumer::new(ConsumerConfig {
         group_id: "log-exporter",
@@ -52,12 +62,14 @@ pub async fn main() -> Result<()> {
     });
 
     consumer.add_handler(&state.topics.test_single, handler_single);
-    consumer.start(state, signal).await
+    consumer.start(state, signal).await?;
+
+    handle.await?;
+
+    Ok(())
 }
 
 async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Result<()> {
-    println!("Received single message: {}", message.payload()?.name);
-
     if let Some(ref key) = message.key {
         if key == "1" {
             let value = message.payload()?;
@@ -65,11 +77,9 @@ async fn handler_single(state: Arc<State>, message: Message<TestMessage>) -> Res
                 .producer
                 .send(&state.topics.test_single, Some("xxx".to_string()), &value)
                 .await?;
-            warn!("test: {value:?}");
-        } else if key == "xxx" {
-            warn!("test");
+        } else {
+            state.tx.send(message.payload()?).await?;
         }
     }
-
     Ok(())
 }

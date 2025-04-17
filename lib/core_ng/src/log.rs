@@ -28,12 +28,8 @@ task_local! {
     static CURRENT_ACTION_ID: String
 }
 
-pub fn init<T>(appender: T)
-where
-    T: ActionLogAppender + Send + Sync + 'static,
-{
+pub fn init() {
     tracing_subscriber::registry()
-        .with(ActionLogLayer { appender })
         .with(
             tracing_subscriber::fmt::layer()
                 .compact()
@@ -41,6 +37,22 @@ where
                 .with_thread_ids(true)
                 .with_filter(LevelFilter::INFO),
         )
+        .init();
+}
+
+pub fn init_with_action<T>(appender: T)
+where
+    T: ActionLogAppender + Send + Sync + 'static,
+{
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .compact()
+                .with_line_number(true)
+                .with_thread_ids(true)
+                .with_filter(LevelFilter::INFO),
+        )
+        .with(ActionLogLayer { appender })
         .init();
 }
 

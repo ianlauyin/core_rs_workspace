@@ -18,7 +18,7 @@ use tracing::warn;
 
 #[tokio::main]
 async fn main() {
-    log::init(ConsoleAppender);
+    log::init_with_action(ConsoleAppender);
 
     test_action().await;
 

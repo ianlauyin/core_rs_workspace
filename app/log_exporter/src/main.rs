@@ -14,7 +14,7 @@ pub struct ApiState {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    log::init(ConsoleAppender);
+    log::init_with_action(ConsoleAppender);
 
     let mut args = std::env::args();
     if let Some(conf) = args.nth(1) {
