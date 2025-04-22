@@ -16,5 +16,5 @@ pub fn current_time_millis() -> u64 {
 
 pub fn duration(from: DateTime<Utc>, to: DateTime<Utc>) -> Duration {
     let elapsed = to - from;
-    Duration::from_millis(elapsed.num_milliseconds() as u64)
+    elapsed.to_std().unwrap_or(Duration::ZERO)
 }

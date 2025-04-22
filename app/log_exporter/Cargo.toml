@@ -14,3 +14,4 @@ tokio.workspace = true
 tokio-stream.workspace = true
 axum.workspace = true
 rdkafka.workspace = true
+chrono.workspace = true

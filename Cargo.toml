@@ -23,7 +23,6 @@ reqwest = { version = "*", default-features = false, features = [
 
 rdkafka = { version = "*", default-features = false, features = [
     "dynamic-linking",
-    "libz",
     "tokio",
     "zstd",
 ] }

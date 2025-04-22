@@ -21,7 +21,7 @@ use rdkafka::message::BorrowedMessage;
 use rdkafka::message::Headers;
 use rdkafka::util::Timeout;
 use serde::de::DeserializeOwned;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -119,7 +119,7 @@ where
         self.handlers.insert(topic, Box::new(handler));
     }
 
-    pub async fn start(self, state: Arc<S>, mut shutdown_signel: Receiver<()>) -> Result<()> {
+    pub async fn start(self, state: Arc<S>, mut shutdown_signel: broadcast::Receiver<()>) -> Result<()> {
         let handlers = &self.handlers;
         let consumer: BaseConsumer = self.config.create()?;
         let topics: Vec<&str> = handlers.keys().cloned().collect();
