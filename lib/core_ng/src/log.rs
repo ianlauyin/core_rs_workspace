@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 
 use anyhow::Result;
 pub use appender::ConsoleAppender;
 use chrono::DateTime;
 use chrono::Utc;
+use indexmap::IndexMap;
 use layer::ActionLogLayer;
 use serde::Serialize;
 use tokio::task_local;
@@ -89,7 +89,7 @@ pub struct ActionLogMessage {
     pub action: String,
     pub result: ActionResult,
     pub ref_id: Option<String>,
-    pub context: HashMap<String, String>,
+    pub context: IndexMap<String, String>,
     pub trace: Option<String>,
     pub elapsed: u128,
 }

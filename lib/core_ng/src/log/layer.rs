@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Write;
 use std::thread;
@@ -6,6 +5,7 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
+use indexmap::IndexMap;
 use tracing::Event;
 use tracing::Level;
 use tracing::Subscriber;
@@ -36,7 +36,7 @@ struct ActionLog {
     start_time: Instant,
     result: ActionResult,
     ref_id: Option<String>,
-    context: HashMap<String, String>,
+    context: IndexMap<String, String>,
     logs: Vec<String>,
 }
 
@@ -192,7 +192,7 @@ impl ActionVisitor {
                 start_time: Instant::now(),
                 result: ActionResult::Ok,
                 ref_id: self.ref_id,
-                context: HashMap::new(),
+                context: IndexMap::new(),
                 logs: Vec::new(),
             })
         } else {
@@ -265,7 +265,7 @@ impl Visit for LogVisitor<'_> {
 }
 
 struct ContextLogVisitor {
-    context: Option<HashMap<String, String>>,
+    context: Option<IndexMap<String, String>>,
 }
 
 impl Visit for ContextLogVisitor {
@@ -278,7 +278,7 @@ impl Visit for ContextLogVisitor {
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
             self.context = if format!("{value:?}") == "context" {
-                Some(HashMap::new())
+                Some(IndexMap::new())
             } else {
                 None
             };
