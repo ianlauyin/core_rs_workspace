@@ -10,12 +10,11 @@ pub struct ConsoleAppender;
 impl ActionLogAppender for ConsoleAppender {
     fn append(&self, action_log: ActionLogMessage) {
         let mut log = format!(
-            "{} | {} | {} | id={} | elapsed={:?}",
+            "{} | {} | {} | id={}",
             action_log.date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             json::to_json_value(&action_log.result),
             action_log.action,
-            action_log.id,
-            Duration::from_nanos(action_log.elapsed as u64),
+            action_log.id
         );
 
         if let Some(ref_id) = action_log.ref_id {
@@ -24,6 +23,14 @@ impl ActionLogAppender for ConsoleAppender {
 
         for (key, value) in action_log.context {
             log.push_str(&format!(" | {key}={value}"));
+        }
+
+        for (key, value) in action_log.stats {
+            if key.ends_with("elapsed") {
+                log.push_str(&format!(" | {key}={:?}", Duration::from_nanos(value as u64)));
+            } else {
+                log.push_str(&format!(" | {key}={value}"));
+            }
         }
 
         println!("{log}");

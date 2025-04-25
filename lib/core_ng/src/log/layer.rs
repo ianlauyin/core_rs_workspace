@@ -36,7 +36,8 @@ struct ActionLog {
     start_time: Instant,
     result: ActionResult,
     ref_id: Option<String>,
-    context: IndexMap<String, String>,
+    context: IndexMap<&'static str, String>,
+    stats: IndexMap<String, u128>,
     logs: Vec<String>,
 }
 
@@ -88,11 +89,14 @@ thread={:?}"#,
         } else if let Some(performance_span) = span.extensions_mut().remove::<PerformanceSpan>() {
             if let Some(action_span) = action_span(&span) {
                 if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
-                    action_log.logs.push(format!(
-                        "{}, elapsed={:?}",
-                        span.name(),
-                        performance_span.start_time.elapsed()
-                    ));
+                    let elapsed = performance_span.start_time.elapsed();
+                    action_log.logs.push(format!("{}, elapsed={:?}", span.name(), elapsed));
+
+                    let value = action_log.stats.entry(format!("{}_elapsed", span.name())).or_default();
+                    *value += elapsed.as_nanos();
+
+                    let value = action_log.stats.entry(format!("{}_count", span.name())).or_default();
+                    *value += 1;
                 }
             }
         }
@@ -154,10 +158,20 @@ thread={:?}"#,
                 action_log.logs.push(log_string);
 
                 // hanldle "context" event
-                let mut context_log_visitor = ContextLogVisitor { context: None };
-                event.record(&mut context_log_visitor);
-                if let Some(context) = context_log_visitor.context {
+                let mut context_visitor = ContextVisitor { context: None };
+                event.record(&mut context_visitor);
+                if let Some(context) = context_visitor.context {
                     action_log.context.extend(context);
+                }
+
+                // hanldle "stats" event
+                let mut stats_visitor = StatsVisitor { stats: None };
+                event.record(&mut stats_visitor);
+                if let Some(stats) = stats_visitor.stats {
+                    for (key, value) in stats {
+                        let stats_value = action_log.stats.entry(key.to_owned()).or_default();
+                        *stats_value += value;
+                    }
                 }
             }
         }
@@ -193,6 +207,7 @@ impl ActionVisitor {
                 result: ActionResult::Ok,
                 ref_id: self.ref_id,
                 context: IndexMap::new(),
+                stats: IndexMap::new(),
                 logs: Vec::new(),
             })
         } else {
@@ -225,6 +240,7 @@ where
 
 fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
     let elapsed = action_log.start_time.elapsed();
+    action_log.stats.insert("elapsed".to_owned(), elapsed.as_nanos());
     let mut trace = None;
     if action_log.result.level() > ActionResult::Ok.level() {
         action_log.logs.push(format!(
@@ -243,8 +259,8 @@ fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
         result: action_log.result,
         ref_id: action_log.ref_id,
         context: action_log.context,
+        stats: action_log.stats,
         trace,
-        elapsed: elapsed.as_nanos(),
     }
 }
 
@@ -252,26 +268,26 @@ struct LogVisitor<'a>(&'a mut String);
 
 impl Visit for LogVisitor<'_> {
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.0.push_str(format!("{}={} ", field.name(), value).as_str());
+        self.0.push_str(&format!("{}={} ", field.name(), value));
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
-            self.0.push_str(format!("{:?} ", value).as_str());
+            self.0.push_str(&format!("{:?} ", value));
         } else {
-            self.0.push_str(format!("{}={:?} ", field.name(), value).as_str());
+            self.0.push_str(&format!("{}={:?} ", field.name(), value));
         }
     }
 }
 
-struct ContextLogVisitor {
-    context: Option<IndexMap<String, String>>,
+struct ContextVisitor {
+    context: Option<IndexMap<&'static str, String>>,
 }
 
-impl Visit for ContextLogVisitor {
+impl Visit for ContextVisitor {
     fn record_str(&mut self, field: &Field, value: &str) {
         if let Some(ref mut context) = self.context {
-            context.insert(field.name().to_string(), value.to_string());
+            context.insert(field.name(), value.to_owned());
         }
     }
 
@@ -283,7 +299,45 @@ impl Visit for ContextLogVisitor {
                 None
             };
         } else if let Some(ref mut context) = self.context {
-            context.insert(field.name().to_string(), format!("{:?}", value));
+            context.insert(field.name(), format!("{:?}", value));
+        }
+    }
+}
+
+struct StatsVisitor {
+    stats: Option<IndexMap<&'static str, u128>>,
+}
+
+impl Visit for StatsVisitor {
+    fn record_f64(&mut self, field: &Field, value: f64) {
+        self.record_u128(field, value as u128);
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.record_u128(field, value as u128);
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.record_u128(field, value as u128);
+    }
+
+    fn record_i128(&mut self, field: &Field, value: i128) {
+        self.record_u128(field, value as u128);
+    }
+
+    fn record_u128(&mut self, field: &Field, value: u128) {
+        if let Some(ref mut stats) = self.stats {
+            stats.insert(field.name(), value);
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.name() == "message" {
+            self.stats = if format!("{value:?}") == "stats" {
+                Some(IndexMap::new())
+            } else {
+                None
+            };
         }
     }
 }

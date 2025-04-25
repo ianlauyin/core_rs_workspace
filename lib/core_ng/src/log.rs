@@ -89,9 +89,9 @@ pub struct ActionLogMessage {
     pub action: String,
     pub result: ActionResult,
     pub ref_id: Option<String>,
-    pub context: IndexMap<String, String>,
+    pub context: IndexMap<&'static str, String>,
+    pub stats: IndexMap<String, u128>,
     pub trace: Option<String>,
-    pub elapsed: u128,
 }
 
 #[derive(PartialEq, Serialize, Debug)]

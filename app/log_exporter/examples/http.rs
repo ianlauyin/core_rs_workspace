@@ -3,6 +3,7 @@ use core_ng::http::HttpMethod::POST;
 use core_ng::http::HttpRequest;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
+use tracing::debug;
 use tracing::warn;
 
 #[tokio::main]
@@ -25,7 +26,7 @@ async fn test() {
         //     let line = line?;
         //     println!("line={line}");
         // }
-
+        debug!(http_client_hello = 1, "stats");
         warn!("test");
 
         Ok(())

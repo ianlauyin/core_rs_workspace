@@ -242,6 +242,7 @@ where
             debug!(key = message.key, payload = message.payload, "[message]");
         }
         debug!(topic, "context");
+        debug!(kafka_message_count = messages.len(), "stats");
         if let Some(timestamp) = messages.iter().filter_map(|message| message.timestamp).min() {
             let lag = Utc::now() - timestamp;
             debug!("lag={lag}");
@@ -323,6 +324,7 @@ where
             debug!("[header] {}={}", key, value);
         }
         debug!(topic, key = message.key, "context");
+        debug!(kafka_message_count = 1, "stats");
         if let Some(timestamp) = message.timestamp {
             let lag = Utc::now() - timestamp;
             debug!("lag={lag}");

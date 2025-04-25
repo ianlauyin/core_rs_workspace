@@ -42,7 +42,7 @@ impl Producer {
     where
         T: Serialize + Debug,
     {
-        let span = debug_span!("kafka", elapsed = field::Empty);
+        let span = debug_span!("kafka_producer", elapsed = field::Empty);
         async {
             let payload = to_json(message)?;
 
