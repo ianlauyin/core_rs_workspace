@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
+use tracing::warn;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestMessage {
@@ -28,6 +29,7 @@ struct State {
 
 struct Topics {
     test_single: Topic<TestMessage>,
+    test_bulk: Topic<TestMessage>,
 }
 
 #[tokio::main]
@@ -38,6 +40,7 @@ pub async fn main() -> Result<()> {
     let state = Arc::new(State {
         topics: Topics {
             test_single: Topic::new("test_single"),
+            test_bulk: Topic::new("test"),
         },
         producer: Producer::new(ProducerConfig {
             bootstrap_servers: "dev.internal:9092",
@@ -58,6 +61,7 @@ pub async fn main() -> Result<()> {
     });
 
     consumer.add_handler(&state.topics.test_single, handler_single);
+    consumer.add_bulk_handler(&state.topics.test_bulk, handler_bulk);
     consumer.start(state, signal).await?;
 
     handle.await?;
@@ -90,4 +94,22 @@ async fn process_message(mut rx: Receiver<TestMessage>) {
     }
 
     println!("finished");
+}
+
+async fn handler_bulk(state: Arc<State>, messages: Vec<Message<TestMessage>>) -> Result<()> {
+    for message in messages {
+        if let Some(ref key) = message.key {
+            if key == "1" {
+                let value = message.payload()?;
+                state
+                    .producer
+                    .send(&state.topics.test_single, Some("xxx".to_string()), &value)
+                    .await?;
+                warn!("test");
+            } else {
+                println!("Received message: {}", message.payload()?.name);
+            }
+        }
+    }
+    Ok(())
 }

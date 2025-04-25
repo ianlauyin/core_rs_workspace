@@ -7,5 +7,4 @@ pub mod log;
 pub mod schedule;
 pub mod shutdown;
 pub mod task;
-pub mod time;
 pub mod web;

@@ -24,21 +24,21 @@ pub struct JobContext {
     pub scheduled_time: DateTime<Utc>,
 }
 
-trait Job<S>: Send + Sync {
+trait Job<S>: Send {
     fn execute(&self, state: Arc<S>, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 impl<F, Fut, S> Job<S> for F
 where
-    F: Fn(Arc<S>, JobContext) -> Fut + Send + Sync,
-    Fut: Future<Output = ()> + Send + Sync + 'static,
+    F: Fn(Arc<S>, JobContext) -> Fut + Send,
+    Fut: Future<Output = ()> + Send + 'static,
 {
     fn execute(&self, state: Arc<S>, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(self(state, context))
     }
 }
 
-trait Trigger: Send + Sync {
+trait Trigger: Send {
     fn next(&self, previous: DateTime<Utc>) -> DateTime<Utc>;
 }
 
@@ -66,8 +66,8 @@ where
 
     pub fn schedule_fixed_rate<J, Fut>(&mut self, name: &'static str, job: J, interval: Duration)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Clone + Send + Sync + 'static,
-        Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        Fut: Future<Output = Result<()>> + Send + 'static,
     {
         let trigger = Box::new(FixedRateTrigger { interval });
         self.add_job(name, job, trigger);
@@ -75,8 +75,8 @@ where
 
     pub fn schedule_daily<J, Fut>(&mut self, name: &'static str, job: J, time: NaiveTime)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Clone + Send + Sync + 'static,
-        Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        Fut: Future<Output = Result<()>> + Send + 'static,
     {
         let trigger = Box::new(DailyTrigger {
             time_zone: self.timezone,
@@ -87,13 +87,10 @@ where
 
     fn add_job<J, Fut>(&mut self, name: &'static str, job: J, trigger: Box<dyn Trigger>)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Clone + Send + Sync + 'static,
-        Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        Fut: Future<Output = Result<()>> + Send + 'static,
     {
-        let job = move |state: Arc<S>, context| {
-            let job = job.clone();
-            process_job(job, state, context)
-        };
+        let job = move |state: Arc<S>, context| process_job(job, state, context);
         self.schedules.push(Schedule {
             name,
             job: Box::new(job),
@@ -144,8 +141,8 @@ where
 
 async fn process_job<S, J, Fut>(job: J, state: Arc<S>, context: JobContext)
 where
-    J: Fn(Arc<S>, JobContext) -> Fut + Clone + Send + Sync + 'static,
-    Fut: Future<Output = Result<()>> + Send + Sync + 'static,
+    J: Fn(Arc<S>, JobContext) -> Fut,
+    Fut: Future<Output = Result<()>>,
 {
     log::start_action("job", None, async move {
         let name = context.name;

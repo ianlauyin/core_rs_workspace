@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use anyhow::Result;
+use chrono::Utc;
 use rdkafka::ClientConfig;
 use rdkafka::message::Header;
 use rdkafka::message::OwnedHeaders;
@@ -17,7 +18,6 @@ use super::topic::Topic;
 use crate::env;
 use crate::json::to_json;
 use crate::log::current_action_id;
-use crate::time::current_time_millis;
 
 pub struct ProducerConfig {
     pub bootstrap_servers: &'static str,
@@ -47,7 +47,7 @@ impl Producer {
             let payload = to_json(message)?;
 
             let mut record = FutureRecord::<String, String>::to(topic.name)
-                .timestamp(current_time_millis() as i64)
+                .timestamp(Utc::now().timestamp_millis())
                 .payload(&payload);
 
             if let Some(ref key) = key {
