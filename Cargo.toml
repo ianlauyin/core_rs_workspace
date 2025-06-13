@@ -34,3 +34,7 @@ uuid = { version = "*", features = ["v7"] }
 indexmap = { version = "*", features = ["serde"] }
 chrono = { version = "*", features = ["serde"] }
 base64 = "*"
+
+[profile.release]
+debug = "line-tables-only"
+opt-level = 3

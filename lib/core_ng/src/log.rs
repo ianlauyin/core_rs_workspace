@@ -96,8 +96,11 @@ pub struct ActionLogMessage {
 
 #[derive(PartialEq, Serialize, Debug)]
 pub enum ActionResult {
+    #[serde(rename = "OK")]
     Ok,
+    #[serde(rename = "WARN")]
     Warn,
+    #[serde(rename = "ERROR")]
     Error,
 }
 

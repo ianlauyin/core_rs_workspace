@@ -12,7 +12,6 @@ use serde::Serialize;
 use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
-use tracing::field;
 
 use super::topic::Topic;
 use crate::env;
@@ -42,7 +41,7 @@ impl Producer {
     where
         T: Serialize + Debug,
     {
-        let span = debug_span!("kafka_producer", elapsed = field::Empty);
+        let span = debug_span!("message_producer", topic = topic.name, key);
         async {
             let payload = to_json(message)?;
 
@@ -60,7 +59,7 @@ impl Producer {
             }
             record = record.headers(headers);
 
-            debug!(key, payload, "send");
+            debug!(topic = topic.name, key, payload, "send");
             let result = self.producer.send(record, Timeout::Never).await;
             if let Err((err, _)) = result {
                 return Err(err.into());

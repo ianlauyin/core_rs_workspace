@@ -8,12 +8,14 @@ use core_ng::log::ConsoleAppender;
 use core_ng::task;
 use tokio::task::yield_now;
 use tracing::Instrument;
+use tracing::Span;
 use tracing::debug;
 use tracing::debug_span;
 use tracing::error;
 use tracing::field;
 use tracing::info;
 use tracing::info_span;
+use tracing::instrument;
 use tracing::warn;
 
 #[tokio::main]
@@ -47,10 +49,13 @@ async fn test_action() {
     .await;
 }
 
+#[instrument]
 async fn handle_request(success: bool) -> Result<()> {
-    let span = info_span!("http", elapsed = field::Empty);
+    let span = info_span!("http", test_value = field::Empty, elapsed = field::Empty);
     async {
         info!(request_id = 123, "Processing request,");
+
+        Span::current().record("test_value", "yes");
     }
     .instrument(span)
     .await;

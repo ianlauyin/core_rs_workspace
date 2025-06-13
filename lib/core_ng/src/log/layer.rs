@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Instant;
 
 use chrono::DateTime;
+use chrono::SecondsFormat;
 use chrono::Utc;
 use indexmap::IndexMap;
 use tracing::Event;
@@ -13,9 +14,11 @@ use tracing::field::Field;
 use tracing::field::Visit;
 use tracing::span::Attributes;
 use tracing::span::Id;
+use tracing::span::Record;
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::registry::Scope;
 use tracing_subscriber::registry::SpanRef;
 
 use super::ActionLogAppender;
@@ -46,7 +49,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
     T: ActionLogAppender + 'static,
 {
-    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, context: Context<'_, S>) {
+    fn on_new_span(&self, attrs: &Attributes, id: &Id, context: Context<S>) {
         let span = context.span(id).unwrap();
         let mut extensions = span.extensions_mut();
 
@@ -63,7 +66,7 @@ date={}
 thread={:?}"#,
                         action_log.action,
                         action_log.id,
-                        action_log.date.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                        action_log.date.to_rfc3339_opts(SecondsFormat::Nanos, true),
                         thread::current().id()
                     ));
 
@@ -74,23 +77,32 @@ thread={:?}"#,
                     extensions.insert(action_log);
                 }
             }
-        } else if span.fields().field("elapsed").is_some() {
-            extensions.insert(PerformanceSpan {
-                start_time: Instant::now(),
-            });
+        } else if let Some(action_span) = action_span(context.span_scope(id)) {
+            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
+                extensions.insert(SpanExtension {
+                    start_time: Instant::now(),
+                });
+
+                let mut log_string = format!("[span:{}] ", span.name());
+                attrs.record(&mut LogVisitor(&mut log_string));
+                log_string.push_str(">>>");
+                action_log.logs.push(log_string);
+            }
         }
     }
 
-    fn on_close(&self, id: Id, ctx: Context<'_, S>) {
-        let span = ctx.span(&id).unwrap();
+    fn on_close(&self, id: Id, context: Context<S>) {
+        let span = context.span(&id).unwrap();
         if let Some(action_log) = span.extensions_mut().remove::<ActionLog>() {
             let action_log_message = close_action(action_log);
             self.appender.append(action_log_message);
-        } else if let Some(performance_span) = span.extensions_mut().remove::<PerformanceSpan>() {
-            if let Some(action_span) = action_span(&span) {
-                if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
-                    let elapsed = performance_span.start_time.elapsed();
-                    action_log.logs.push(format!("{}, elapsed={:?}", span.name(), elapsed));
+        } else if let Some(action_span) = action_span(context.span_scope(&id)) {
+            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
+                if let Some(span_extension) = span.extensions_mut().remove::<SpanExtension>() {
+                    let elapsed = span_extension.start_time.elapsed();
+                    action_log
+                        .logs
+                        .push(format!("[span:{}] elapsed={:?} <<<", span.name(), elapsed));
 
                     let value = action_log.stats.entry(format!("{}_elapsed", span.name())).or_default();
                     *value += elapsed.as_nanos();
@@ -102,28 +114,23 @@ thread={:?}"#,
         }
     }
 
-    fn on_event(&self, event: &Event<'_>, context: Context<'_, S>) {
+    fn on_record(&self, id: &Id, values: &Record, context: Context<S>) {
+        if let Some(action_span) = action_span(context.span_scope(id)) {
+            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
+                let span = context.span(id).unwrap();
+                let mut log_string = format!("[span:{}] ", span.name());
+                values.record(&mut LogVisitor(&mut log_string));
+                action_log.logs.push(log_string);
+            }
+        }
+    }
+
+    fn on_event(&self, event: &Event, context: Context<S>) {
         if event.metadata().level() == &Level::TRACE {
             return;
         }
 
-        let mut action_span: Option<SpanRef<'_, S>> = None;
-        let mut spans = String::new();
-
-        if let Some(scope) = context.event_scope(event) {
-            for span in scope.from_root() {
-                if span.name() == "action" && span.extensions().get::<ActionLog>().is_some() {
-                    action_span = Some(span);
-                } else {
-                    if !spans.is_empty() {
-                        spans.push(':');
-                    }
-                    spans.push_str(span.metadata().name());
-                }
-            }
-        }
-
-        if let Some(span) = action_span {
+        if let Some(span) = action_span(context.event_scope(event)) {
             if let Some(action_log) = span.extensions_mut().get_mut::<ActionLog>() {
                 let elapsed = action_log.start_time.elapsed();
                 let total_seconds = elapsed.as_secs();
@@ -144,10 +151,6 @@ thread={:?}"#,
                     } else if level == &Level::WARN && action_log.result.level() < ActionResult::Warn.level() {
                         action_log.result = ActionResult::Warn;
                     }
-                }
-
-                if !spans.is_empty() {
-                    write!(log_string, "{} ", spans).unwrap();
                 }
 
                 write!(log_string, "{}:{} ", metadata.target(), metadata.line().unwrap_or(0)).unwrap();
@@ -178,7 +181,7 @@ thread={:?}"#,
     }
 }
 
-struct PerformanceSpan {
+struct SpanExtension {
     start_time: Instant,
 }
 
@@ -229,13 +232,13 @@ impl Visit for ActionVisitor {
     fn record_debug(&mut self, _field: &Field, _value: &dyn Debug) {}
 }
 
-fn action_span<'b, S>(current_span: &SpanRef<'b, S>) -> Option<SpanRef<'b, S>>
+fn action_span<'a, S>(scope: Option<Scope<'a, S>>) -> Option<SpanRef<'a, S>>
 where
-    S: Subscriber + for<'a> LookupSpan<'a>,
+    S: for<'lookup> LookupSpan<'lookup>,
 {
-    current_span
-        .scope()
-        .find(|parent_span| parent_span.name() == "action" && parent_span.extensions().get::<ActionLog>().is_some())
+    scope.and_then(|mut scope| {
+        scope.find(|span| span.name() == "action" && span.extensions().get::<ActionLog>().is_some())
+    })
 }
 
 fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
@@ -268,14 +271,14 @@ struct LogVisitor<'a>(&'a mut String);
 
 impl Visit for LogVisitor<'_> {
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.0.push_str(&format!("{}={} ", field.name(), value));
+        write!(self.0, "{}={} ", field.name(), value).unwrap();
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
-            self.0.push_str(&format!("{:?} ", value));
+            write!(self.0, "{:?} ", value).unwrap();
         } else {
-            self.0.push_str(&format!("{}={:?} ", field.name(), value));
+            write!(self.0, "{}={:?} ", field.name(), value).unwrap();
         }
     }
 }

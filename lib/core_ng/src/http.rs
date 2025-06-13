@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io;
-use std::io::ErrorKind;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -18,7 +17,6 @@ use reqwest::Url;
 use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
-use tracing::field;
 
 pub struct HttpClient {
     client: reqwest::Client,
@@ -61,7 +59,7 @@ impl HttpResponse {
     ) -> Lines<IntoAsyncRead<MapErr<impl Stream<Item = BytesResult>, impl FnMut(reqwest::Error) -> io::Error>>> {
         self.response
             .bytes_stream()
-            .map_err(|e| io::Error::new(ErrorKind::Other, e))
+            .map_err(io::Error::other)
             .into_async_read()
             .lines()
     }
@@ -75,7 +73,7 @@ impl HttpResponse {
 
 impl HttpClient {
     pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse> {
-        let span = debug_span!("http_client", elapsed = field::Empty);
+        let span = debug_span!("http_client", url = request.url, method = ?request.method);
         async {
             debug!(method = ?request.method, "[request]");
             debug!(url = request.url, "[request]");

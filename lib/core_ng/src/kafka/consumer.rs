@@ -47,15 +47,15 @@ impl<T: DeserializeOwned> Message<T> {
 }
 
 trait MessageHandler<S> {
-    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage<'_>>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 impl<F, Fut, S> MessageHandler<S> for F
 where
-    F: Fn(Arc<S>, Vec<BorrowedMessage<'_>>) -> Fut + Send,
+    F: Fn(Arc<S>, Vec<BorrowedMessage>) -> Fut + Send,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage<'_>>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(self(state, messages))
     }
 }
@@ -110,7 +110,7 @@ where
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
-        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
+        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage>| {
             let messages: Vec<Message<M>> = messages.into_iter().map(Message::from).collect();
             handle_messages(topic, messages, handler, state)
         };
@@ -125,7 +125,7 @@ where
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
-        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage<'_>>| {
+        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage>| {
             let messages: Vec<Message<M>> = messages.into_iter().map(Message::from).collect();
             handle_bulk_messages(topic, messages, handler, state)
         };
@@ -170,7 +170,7 @@ where
 }
 
 impl<T: DeserializeOwned> From<BorrowedMessage<'_>> for Message<T> {
-    fn from(message: BorrowedMessage<'_>) -> Message<T> {
+    fn from(message: BorrowedMessage) -> Message<T> {
         let key = message.key().map(|data| String::from_utf8_lossy(data).to_string());
         let value = message.payload().map(|data| String::from_utf8_lossy(data).to_string());
 
@@ -206,8 +206,8 @@ fn poll_message_groups(
     consumer: &BaseConsumer,
     max_wait_time: Duration,
     max_records: usize,
-) -> Result<HashMap<String, Vec<BorrowedMessage<'_>>>> {
-    let mut messages: HashMap<String, Vec<BorrowedMessage<'_>>> = HashMap::new();
+) -> Result<HashMap<String, Vec<BorrowedMessage>>> {
+    let mut messages: HashMap<String, Vec<BorrowedMessage>> = HashMap::new();
     let start_time = Instant::now();
     let mut count = 1;
     loop {
@@ -237,12 +237,12 @@ where
     Fut: Future<Output = Result<()>>,
     M: DeserializeOwned,
 {
-    log::start_action("kafka", None, async {
+    log::start_action("message", None, async {
         for message in messages.iter() {
             debug!(key = message.key, payload = message.payload, "[message]");
         }
         debug!(topic, "context");
-        debug!(kafka_message_count = messages.len(), "stats");
+        debug!(message_count = messages.len(), "stats");
         if let Some(timestamp) = messages.iter().filter_map(|message| message.timestamp).min() {
             let lag = Utc::now() - timestamp;
             debug!("lag={lag}");
@@ -310,7 +310,7 @@ where
     M: DeserializeOwned,
 {
     let ref_id = message.headers.get("ref_id").map(|value| value.to_owned());
-    log::start_action("kafka", ref_id, async {
+    log::start_action("message", ref_id, async {
         debug!(topic, "[message]");
         debug!(key = ?message.key, "[message]");
         debug!(
@@ -324,7 +324,7 @@ where
             debug!("[header] {}={}", key, value);
         }
         debug!(topic, key = message.key, "context");
-        debug!(kafka_message_count = 1, "stats");
+        debug!(message_count = 1, "stats");
         if let Some(timestamp) = message.timestamp {
             let lag = Utc::now() - timestamp;
             debug!("lag={lag}");
