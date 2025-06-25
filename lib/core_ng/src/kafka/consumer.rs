@@ -46,7 +46,7 @@ impl<T: DeserializeOwned> Message<T> {
     }
 }
 
-trait MessageHandler<S> {
+trait MessageHandler<S>: Send {
     fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
@@ -62,7 +62,7 @@ where
 
 pub struct ConsumerConfig {
     pub group_id: &'static str,
-    pub bootstrap_servers: &'static str,
+    pub bootstrap_servers: String,
     pub poll_max_wait_time: Duration,
     pub poll_max_records: usize,
 }
@@ -71,7 +71,7 @@ impl Default for ConsumerConfig {
     fn default() -> Self {
         Self {
             group_id: env::APP_NAME,
-            bootstrap_servers: "localhost:9092",
+            bootstrap_servers: "localhost:9092".to_owned(),
             poll_max_wait_time: Duration::from_secs(1),
             poll_max_records: 1000,
         }

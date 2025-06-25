@@ -56,7 +56,7 @@ pub async fn main() -> Result<()> {
 
     let mut consumer = MessageConsumer::new(ConsumerConfig {
         group_id: "log-exporter",
-        bootstrap_servers: "dev.internal:9092",
+        bootstrap_servers: "dev.internal:9092".to_owned(),
         ..Default::default()
     });
 

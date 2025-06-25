@@ -5,6 +5,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
+use core_ng::shell;
 use core_ng::task;
 use tokio::task::yield_now;
 use tracing::Instrument;
@@ -37,6 +38,7 @@ async fn test_action() {
         task::spawn_action("some-task", async move {
             *y.lock().unwrap() = 2;
             warn!("y = {y:?}");
+            shell::run("echo 'Hello, World!'").await.unwrap();
             Ok(())
         });
 
