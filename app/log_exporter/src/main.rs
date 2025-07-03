@@ -2,31 +2,42 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::Router;
+use chrono::FixedOffset;
+use chrono::NaiveTime;
 use core_ng::conf::load_conf;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::MessageConsumer;
 use core_ng::kafka::topic::Topic;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
+use core_ng::schedule::Scheduler;
 use core_ng::shutdown::Shutdown;
 use core_ng::task;
 use core_ng::web::server::start_http_server;
+use job::process_log_job;
 use kafka::action_log_handler::ActionLogMessage;
 use kafka::action_log_handler::action_log_message_handler;
+use kafka::event_handler::EventMessage;
+use kafka::event_handler::event_message_handler;
 use serde::Deserialize;
+use sha2::Digest;
 use web::upload;
 
+pub mod job;
 pub mod kafka;
+pub mod service;
 pub mod web;
 
 #[derive(Debug, Deserialize, Clone)]
 struct AppConfig {
+    log_dir: String,
     kafka_uri: String,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
+            log_dir: "./log".to_owned(),
             kafka_uri: "dev.internal:9092".to_owned(),
         }
     }
@@ -34,20 +45,30 @@ impl Default for AppConfig {
 
 pub struct AppState {
     topics: Topics,
+
+    log_dir: String,
+    hash: String,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        AppState {
+impl AppState {
+    fn new(config: &AppConfig) -> Result<Self> {
+        let hostname = hostname::get()?.to_string_lossy().to_string();
+        let hash = &format!("{:x}", sha2::Sha256::digest(hostname))[0..5];
+
+        Ok(AppState {
             topics: Topics {
                 action: Topic::new("action-log-v2"),
+                event: Topic::new("event"),
             },
-        }
+            log_dir: config.log_dir.clone(),
+            hash: hash.to_owned(),
+        })
     }
 }
 
 struct Topics {
     action: Topic<ActionLogMessage>,
+    event: Topic<EventMessage>,
 }
 
 #[tokio::main]
@@ -59,9 +80,10 @@ async fn main() -> Result<()> {
     let shutdown = Shutdown::new();
     let http_signal = shutdown.subscribe();
     let consumer_signal = shutdown.subscribe();
+    let scheduler_signal = shutdown.subscribe();
     shutdown.listen();
 
-    let state = Arc::new(AppState::default());
+    let state = Arc::new(AppState::new(&config)?);
 
     let http_state = state.clone();
     task::spawn_task(async move {
@@ -71,14 +93,27 @@ async fn main() -> Result<()> {
         start_http_server(app, http_signal).await
     });
 
+    let scheduler_state = state.clone();
+    task::spawn_task(async move {
+        let mut scheduler = Scheduler::new(FixedOffset::east_opt(8 * 60 * 60).unwrap());
+        scheduler.schedule_daily(
+            "process-log-job",
+            process_log_job,
+            NaiveTime::from_hms_opt(1, 0, 0).unwrap(),
+        );
+        scheduler.start(scheduler_state, scheduler_signal).await
+    });
+
     task::spawn_task(async move {
         let mut consumer = MessageConsumer::new(ConsumerConfig {
             bootstrap_servers: config.kafka_uri.clone(),
             ..Default::default()
         });
         consumer.add_bulk_handler(&state.topics.action, action_log_message_handler);
+        consumer.add_bulk_handler(&state.topics.event, event_message_handler);
         consumer.start(state, consumer_signal).await
     });
+
     task::shutdown().await;
 
     Ok(())

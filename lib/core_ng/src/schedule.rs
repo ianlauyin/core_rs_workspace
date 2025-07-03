@@ -98,7 +98,7 @@ where
         });
     }
 
-    pub async fn start(self, state: Arc<S>, shutdown_signel: broadcast::Receiver<()>) {
+    pub async fn start(self, state: Arc<S>, shutdown_signel: broadcast::Receiver<()>) -> Result<()> {
         let mut handles = vec![];
         for schedule in self.schedules {
             let state = state.clone();
@@ -136,6 +136,7 @@ where
             handle.await.unwrap();
         }
         info!("scheduler stopped");
+        Ok(())
     }
 }
 

@@ -34,7 +34,7 @@ use crate::log;
 
 pub struct Message<T: DeserializeOwned> {
     pub key: Option<String>,
-    payload: String,
+    pub payload: String,
     pub headers: HashMap<String, String>,
     pub timestamp: Option<DateTime<Utc>>,
     _marker: PhantomData<T>,

@@ -16,9 +16,9 @@ impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
         match self {
             HttpError::InternalError(error) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Error: {}", error)).into_response()
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Error: {error}")).into_response()
             }
-            HttpError::NotFound(error) => (StatusCode::NOT_FOUND, format!("Not Found: {}", error)).into_response(),
+            HttpError::NotFound(error) => (StatusCode::NOT_FOUND, format!("Not Found: {error}")).into_response(),
         }
     }
 }
@@ -34,6 +34,6 @@ where
 
 impl Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self))
+        f.write_fmt(format_args!("{self:?}"))
     }
 }

@@ -71,7 +71,7 @@ thread={:?}"#,
                     ));
 
                     if let Some(ref ref_id) = action_log.ref_id {
-                        action_log.logs.push(format!("ref_id={}", ref_id));
+                        action_log.logs.push(format!("ref_id={ref_id}"));
                     }
 
                     extensions.insert(action_log);
@@ -139,12 +139,12 @@ thread={:?}"#,
                 let nanos = elapsed.subsec_nanos();
 
                 let mut log_string = String::new();
-                write!(log_string, "{:02}:{:02}.{:09} ", minutes, seconds, nanos).unwrap();
+                write!(log_string, "{minutes:02}:{seconds:02}.{nanos:09} ").unwrap();
 
                 let metadata = event.metadata();
                 let level = metadata.level();
                 if level <= &Level::INFO {
-                    write!(log_string, "{} ", level).unwrap();
+                    write!(log_string, "{level} ").unwrap();
 
                     if level == &Level::ERROR && action_log.result.level() < ActionResult::Error.level() {
                         action_log.result = ActionResult::Error;
@@ -247,10 +247,9 @@ fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
     let mut trace = None;
     if action_log.result.level() > ActionResult::Ok.level() {
         action_log.logs.push(format!(
-            r#"elapsed={:?}
+            r#"elapsed={elapsed:?}
 === action end ===
-"#,
-            elapsed
+"#
         ));
         trace = Some(action_log.logs.join("\n"));
     }
@@ -276,7 +275,7 @@ impl Visit for LogVisitor<'_> {
 
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
-            write!(self.0, "{:?} ", value).unwrap();
+            write!(self.0, "{value:?} ").unwrap();
         } else {
             write!(self.0, "{}={:?} ", field.name(), value).unwrap();
         }
@@ -302,7 +301,7 @@ impl Visit for ContextVisitor {
                 None
             };
         } else if let Some(ref mut context) = self.context {
-            context.insert(field.name(), format!("{:?}", value));
+            context.insert(field.name(), format!("{value:?}"));
         }
     }
 }
