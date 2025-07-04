@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt::Debug;
 
 use anyhow::Result;
@@ -44,6 +45,8 @@ pub fn init_with_action<T>(appender: T)
 where
     T: ActionLogAppender + Send + Sync + 'static,
 {
+    unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
@@ -68,7 +71,7 @@ where
             async {
                 let result = task.await;
                 if let Err(e) = result {
-                    error!("{}\n{}", e, e.backtrace());
+                    error!(backtrace = format!("{}", e.backtrace()), "{e}");
                 }
             }
             .instrument(action_span),
@@ -89,6 +92,8 @@ pub struct ActionLogMessage {
     pub action: String,
     pub result: ActionResult,
     pub ref_id: Option<String>,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
     pub context: IndexMap<&'static str, String>,
     pub stats: IndexMap<String, u128>,
     pub trace: Option<String>,

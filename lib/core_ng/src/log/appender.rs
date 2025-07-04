@@ -17,6 +17,14 @@ impl ActionLogAppender for ConsoleAppender {
             action_log.id
         );
 
+        if let Some(error_code) = action_log.error_code {
+            log.push_str(&format!(" | error_code={error_code}"));
+        }
+
+        if let Some(error_message) = action_log.error_message {
+            log.push_str(&format!(" | error_message={error_message}"));
+        }
+
         if let Some(ref_id) = action_log.ref_id {
             log.push_str(&format!(" | ref_id={ref_id}"));
         }

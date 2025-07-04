@@ -30,8 +30,9 @@ pub mod web;
 
 #[derive(Debug, Deserialize, Clone)]
 struct AppConfig {
-    log_dir: String,
     kafka_uri: String,
+    log_dir: String,
+    bucket: String,
 }
 
 impl Default for AppConfig {
@@ -39,6 +40,7 @@ impl Default for AppConfig {
         AppConfig {
             log_dir: "./log".to_owned(),
             kafka_uri: "dev.internal:9092".to_owned(),
+            bucket: "bucket".to_owned(),
         }
     }
 }
@@ -48,12 +50,13 @@ pub struct AppState {
 
     log_dir: String,
     hash: String,
+    bucket: String,
 }
 
 impl AppState {
     fn new(config: &AppConfig) -> Result<Self> {
         let hostname = hostname::get()?.to_string_lossy().to_string();
-        let hash = &format!("{:x}", sha2::Sha256::digest(hostname))[0..5];
+        let hash = &format!("{:x}", sha2::Sha256::digest(hostname))[0..6];
 
         Ok(AppState {
             topics: Topics {
@@ -62,6 +65,7 @@ impl AppState {
             },
             log_dir: config.log_dir.clone(),
             hash: hash.to_owned(),
+            bucket: config.bucket.clone(),
         })
     }
 }
@@ -79,21 +83,14 @@ async fn main() -> Result<()> {
 
     let shutdown = Shutdown::new();
     let http_signal = shutdown.subscribe();
-    let consumer_signal = shutdown.subscribe();
     let scheduler_signal = shutdown.subscribe();
+    let consumer_signal = shutdown.subscribe();
     shutdown.listen();
 
     let state = Arc::new(AppState::new(&config)?);
-
-    let http_state = state.clone();
-    task::spawn_task(async move {
-        let app = Router::new();
-        let app = app.merge(upload::routes());
-        let app = app.with_state(http_state);
-        start_http_server(app, http_signal).await
-    });
-
     let scheduler_state = state.clone();
+    let consumer_state = state.clone();
+
     task::spawn_task(async move {
         let mut scheduler = Scheduler::new(FixedOffset::east_opt(8 * 60 * 60).unwrap());
         scheduler.schedule_daily(
@@ -109,10 +106,15 @@ async fn main() -> Result<()> {
             bootstrap_servers: config.kafka_uri.clone(),
             ..Default::default()
         });
-        consumer.add_bulk_handler(&state.topics.action, action_log_message_handler);
-        consumer.add_bulk_handler(&state.topics.event, event_message_handler);
-        consumer.start(state, consumer_signal).await
+        consumer.add_bulk_handler(&consumer_state.topics.action, action_log_message_handler);
+        consumer.add_bulk_handler(&consumer_state.topics.event, event_message_handler);
+        consumer.start(consumer_state, consumer_signal).await
     });
+
+    let app = Router::new();
+    let app = app.merge(upload::routes());
+    let app = app.with_state(state);
+    start_http_server(app, http_signal).await?;
 
     task::shutdown().await;
 

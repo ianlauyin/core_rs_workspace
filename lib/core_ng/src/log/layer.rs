@@ -39,6 +39,8 @@ struct ActionLog {
     start_time: Instant,
     result: ActionResult,
     ref_id: Option<String>,
+    error_code: Option<String>,
+    error_message: Option<String>,
     context: IndexMap<&'static str, String>,
     stats: IndexMap<String, u128>,
     logs: Vec<String>,
@@ -146,10 +148,23 @@ thread={:?}"#,
                 if level <= &Level::INFO {
                     write!(log_string, "{level} ").unwrap();
 
-                    if level == &Level::ERROR && action_log.result.level() < ActionResult::Error.level() {
-                        action_log.result = ActionResult::Error;
-                    } else if level == &Level::WARN && action_log.result.level() < ActionResult::Warn.level() {
-                        action_log.result = ActionResult::Warn;
+                    if level == &Level::ERROR || level == &Level::WARN {
+                        let result = if level == &Level::ERROR {
+                            ActionResult::Error
+                        } else {
+                            ActionResult::Warn
+                        };
+
+                        if action_log.result.level() < result.level() {
+                            action_log.result = result;
+                            let mut error_visitor = ErrorVisitor {
+                                message: None,
+                                code: None,
+                            };
+                            event.record(&mut error_visitor);
+                            action_log.error_code = error_visitor.code;
+                            action_log.error_message = error_visitor.message;
+                        }
                     }
                 }
 
@@ -209,6 +224,8 @@ impl ActionVisitor {
                 start_time: Instant::now(),
                 result: ActionResult::Ok,
                 ref_id: self.ref_id,
+                error_code: None,
+                error_message: None,
                 context: IndexMap::new(),
                 stats: IndexMap::new(),
                 logs: Vec::new(),
@@ -260,6 +277,8 @@ fn close_action(mut action_log: ActionLog) -> ActionLogMessage {
         action: action_log.action,
         result: action_log.result,
         ref_id: action_log.ref_id,
+        error_code: action_log.error_code,
+        error_message: action_log.error_message,
         context: action_log.context,
         stats: action_log.stats,
         trace,
@@ -270,7 +289,11 @@ struct LogVisitor<'a>(&'a mut String);
 
 impl Visit for LogVisitor<'_> {
     fn record_str(&mut self, field: &Field, value: &str) {
-        write!(self.0, "{}={} ", field.name(), value).unwrap();
+        if field.name() == "backtrace" {
+            write!(self.0, "\n{value}").unwrap();
+        } else {
+            write!(self.0, "{}={} ", field.name(), value).unwrap();
+        }
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
@@ -340,6 +363,30 @@ impl Visit for StatsVisitor {
             } else {
                 None
             };
+        }
+    }
+}
+
+struct ErrorVisitor {
+    code: Option<String>,
+    message: Option<String>,
+}
+
+impl Visit for ErrorVisitor {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "error_code" {
+            self.code = Some(value.to_string());
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.name() == "message" {
+            let message = format!("{value:?}");
+            self.message = Some(if message.len() > 200 {
+                message[..200].to_string()
+            } else {
+                message
+            });
         }
     }
 }

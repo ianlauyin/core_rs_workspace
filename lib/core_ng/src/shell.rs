@@ -19,7 +19,7 @@ pub async fn run(command: &str) -> Result<String> {
         if output.status.success() {
             Ok(stdout.to_string())
         } else {
-            Err(anyhow!("command failed, status={}", output.status))
+            Err(anyhow!("command failed, status={}", output.status.code().unwrap_or(-1)))
         }
     }
     .instrument(span)

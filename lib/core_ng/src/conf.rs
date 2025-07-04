@@ -11,7 +11,9 @@ where
     T: DeserializeOwned + Default,
 {
     let mut args = std::env::args();
-    if let Some(arg) = args.nth(1) {
+    if let Some(arg) = args.nth(1)
+        && !arg.is_empty()
+    {
         info!(path = arg, "load conf");
         let config: T = load_file(Path::new(&arg))?;
         Ok(config)
