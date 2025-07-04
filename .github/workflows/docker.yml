@@ -13,6 +13,7 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
       - uses: docker/build-push-action@v4
         with:
-          context: "app/log_exporter"
+          context: .
+          file: app/log_exporter/Dockerfile
           tags: "neowu/log-exporter:rust-test"
           push: true
