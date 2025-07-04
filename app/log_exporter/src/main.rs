@@ -21,7 +21,6 @@ use kafka::event_handler::EventMessage;
 use kafka::event_handler::event_message_handler;
 use serde::Deserialize;
 use sha2::Digest;
-use web::upload;
 
 pub mod job;
 pub mod kafka;
@@ -112,7 +111,7 @@ async fn main() -> Result<()> {
     });
 
     let app = Router::new();
-    let app = app.merge(upload::routes());
+    let app = app.merge(web::routes());
     let app = app.with_state(state);
     start_http_server(app, http_signal).await?;
 
