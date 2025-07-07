@@ -24,7 +24,8 @@ RUN         ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
 COPY        --from=builder /usr/local/cargo/bin/log_exporter /usr/local/bin/log_exporter
 COPY        --from=builder /usr/src/app/log_exporter/conf/conf.json /usr/local/etc/log_exporter.json
 
-RUN         addgroup --gid 1000 --system app && adduser --system --ingroup app --uid 1000 app
+# gcloud iam requires user home
+RUN         addgroup --gid 1000 --system app && adduser --system --home /home/app --ingroup app --uid 1000 app
 RUN         mkdir -p /var/log/app && chown -R app:app /var/log/app
 VOLUME      /var/log/app
 USER        1000
