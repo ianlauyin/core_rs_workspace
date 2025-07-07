@@ -21,7 +21,7 @@ pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::R
     let app = app.merge(router);
     let app = app.layer(middleware::from_fn(action_log_layer));
 
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
+    let listener = TcpListener::bind("0.0.0.0:8080").await?;
     info!("http server stated");
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {

@@ -49,7 +49,7 @@ pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()
         let parquet_path = parquet_path_buf.to_string_lossy();
 
         let command = &format!(
-            r#"COPY (SELECT * FROM read_ndjson( ['{local_path}'],
+            r#"SET memory_limit = '256MB';SET temp_directory = '/tmp/duckdb';COPY (SELECT * FROM read_ndjson( ['{local_path}'],
             columns = {{'date': 'TIMESTAMPTZ', id: 'STRING', app: 'STRING', host: 'STRING', result: 'STRING', action: 'STRING', ref_ids: 'STRING[]', correlation_ids: 'STRING[]', clients: 'STRING[]', error_code: 'STRING', error_message: 'STRING', elapsed: 'LONG', context: 'MAP(STRING, STRING[])', stats: 'MAP(STRING, DOUBLE)', perf_stats: 'MAP(STRING, MAP(STRING, DOUBLE))'}}
         )) TO '{parquet_path}' (FORMAT 'parquet');"#
         );
@@ -73,7 +73,7 @@ pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()
         let parquet_path = parquet_path_buf.to_string_lossy();
 
         let command = &format!(
-            r#"COPY (SELECT * FROM read_ndjson( ['{local_path}'],
+            r#"SET memory_limit = '256MB';SET temp_directory = '/tmp/duckdb';COPY (SELECT * FROM read_ndjson( ['{local_path}'],
             columns = {{'date': 'TIMESTAMPTZ', id: 'STRING', app: 'STRING', received_time: 'TIMESTAMPTZ', result: 'STRING', action: 'STRING', error_code: 'STRING', error_message: 'STRING', elapsed: 'LONG', context: 'MAP(STRING, STRING)', stats: 'MAP(STRING, DOUBLE)', info: 'MAP(STRING, STRING)'}}
         )) TO '{parquet_path}' (FORMAT 'parquet');"#
         );

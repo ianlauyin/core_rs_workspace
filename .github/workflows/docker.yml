@@ -15,5 +15,5 @@ jobs:
         with:
           context: .
           file: app/log_exporter/Dockerfile
-          tags: "neowu/log-exporter:rust-test"
+          tags: "neowu/log-exporter:rust"
           push: true

@@ -9,7 +9,6 @@ pub async fn run(command: &str) -> Result<String> {
     let span = debug_span!("shell", command);
 
     async {
-        debug!(command);
         let output = Command::new("sh").arg("-c").arg(command).output().await?;
         debug!(status = output.status.code());
         let stdout = String::from_utf8_lossy(&output.stdout);
