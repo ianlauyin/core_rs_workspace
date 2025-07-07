@@ -60,7 +60,7 @@ pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()
         // requires '-q', otherwise standard output may block if buffer is full, Shell reads std after process ends
         // and '-m' may stress network bandwidth, currently not really necessary
         let bucket = &state.bucket;
-        let command = format!("gcloud storage cp --quiet cp {parquet_path} gs://{bucket}{remote_path}",);
+        let command = format!("gcloud storage cp --quiet cp {parquet_path} {bucket}/{remote_path}",);
         shell::run(&command).await?;
 
         fs::remove_file(parquet_path_buf)?;
@@ -84,7 +84,7 @@ pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()
         // requires '-q', otherwise standard output may block if buffer is full, Shell reads std after process ends
         // and '-m' may stress network bandwidth, currently not really necessary
         let bucket = &state.bucket;
-        let command = format!("gcloud storage cp --quiet cp {parquet_path} gs://{bucket}{remote_path}",);
+        let command = format!("gcloud storage cp --quiet cp {parquet_path} {bucket}/{remote_path}",);
         shell::run(&command).await?;
 
         fs::remove_file(parquet_path_buf)?;

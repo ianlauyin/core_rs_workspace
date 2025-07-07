@@ -39,7 +39,7 @@ impl Default for AppConfig {
         AppConfig {
             log_dir: "./log".to_owned(),
             kafka_uri: "dev.internal:9092".to_owned(),
-            bucket: "bucket".to_owned(),
+            bucket: "gs://archive/log".to_owned(),
         }
     }
 }
