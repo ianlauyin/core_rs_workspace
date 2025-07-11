@@ -42,15 +42,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.98"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
-dependencies = [
- "backtrace",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -345,7 +336,6 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "core_ng"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "axum-server",
  "bytes",
@@ -1040,18 +1030,19 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 name = "log_exporter"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "axum",
  "chrono",
  "core_ng",
  "hostname",
  "rdkafka",
+ "reqwest",
  "serde",
  "sha2",
  "tokio",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

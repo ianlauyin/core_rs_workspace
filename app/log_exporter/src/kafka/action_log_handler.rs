@@ -5,9 +5,9 @@ use std::io::LineWriter;
 use std::io::Write;
 use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use core_ng::error::Exception;
 use core_ng::json;
 use core_ng::kafka::consumer::Message;
 use rdkafka::message::ToBytes;
@@ -45,7 +45,10 @@ pub struct PerformanceStatMessage {
     write_entries: Option<i64>,
 }
 
-pub async fn action_log_message_handler(state: Arc<AppState>, messages: Vec<Message<ActionLogMessage>>) -> Result<()> {
+pub async fn action_log_message_handler(
+    state: Arc<AppState>,
+    messages: Vec<Message<ActionLogMessage>>,
+) -> Result<(), Exception> {
     let now = Utc::now().date_naive();
     let path = local_file_path("action", now, &state)?;
 

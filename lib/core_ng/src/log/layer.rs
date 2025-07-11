@@ -164,6 +164,10 @@ thread={:?}"#,
                             event.record(&mut error_visitor);
                             action_log.error_code = error_visitor.code;
                             action_log.error_message = error_visitor.message;
+
+                            if let Some(ref error_code) = action_log.error_code {
+                                write!(log_string, "[{error_code}] ").unwrap();
+                            }
                         }
                     }
                 }
@@ -291,6 +295,7 @@ impl Visit for LogVisitor<'_> {
     fn record_str(&mut self, field: &Field, value: &str) {
         if field.name() == "backtrace" {
             write!(self.0, "\n{value}").unwrap();
+        } else if field.name() == "error_code" {
         } else {
             write!(self.0, "{}={} ", field.name(), value).unwrap();
         }

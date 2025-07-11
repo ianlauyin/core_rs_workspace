@@ -1,7 +1,6 @@
 use std::env;
 use std::fmt::Debug;
 
-use anyhow::Result;
 pub use appender::ConsoleAppender;
 use chrono::DateTime;
 use chrono::Utc;
@@ -17,6 +16,8 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uuid::Uuid;
+
+use crate::error::Exception;
 
 mod appender;
 mod layer;
@@ -61,7 +62,7 @@ where
 
 pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
 where
-    T: Future<Output = Result<()>>,
+    T: Future<Output = Result<(), Exception>>,
 {
     let action_id = Uuid::now_v7().to_string();
     let action_span = info_span!("action", action, action_id, ref_id);
@@ -71,7 +72,11 @@ where
             async {
                 let result = task.await;
                 if let Err(e) = result {
-                    error!(backtrace = format!("{}", e.backtrace()), "{e}");
+                    if let Some(ref error_code) = e.code {
+                        error!(error_code, backtrace = format!("{e}"), "{}", e.message);
+                    } else {
+                        error!(backtrace = format!("{e}"), "{}", e.message);
+                    }
                 }
             }
             .instrument(action_span),

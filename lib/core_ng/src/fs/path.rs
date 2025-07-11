@@ -1,19 +1,16 @@
 use std::path::Path;
 
-use anyhow::Context;
-use anyhow::Result;
+use crate::error::Exception;
 
 pub trait PathExt {
-    fn file_extension(&self) -> Result<&str>;
+    fn file_extension(&self) -> Result<&str, Exception>;
 }
 
 impl PathExt for Path {
-    fn file_extension(&self) -> Result<&str> {
-        let extension = self
-            .extension()
-            .with_context(|| format!("file must have extension, path={}", self.to_string_lossy()))?
+    fn file_extension(&self) -> Result<&str, Exception> {
+        self.extension()
+            .ok_or_else(|| exception!(message = format!("file must have extension, path={}", self.to_string_lossy())))?
             .to_str()
-            .with_context(|| format!("path is invalid, path={}", self.to_string_lossy()))?;
-        Ok(extension)
+            .ok_or_else(|| exception!(message = format!("path is invalid, path={}", self.to_string_lossy())))
     }
 }

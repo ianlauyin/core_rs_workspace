@@ -1,11 +1,12 @@
-use anyhow::Result;
-use anyhow::anyhow;
 use tokio::process::Command;
 use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
 
-pub async fn run(command: &str) -> Result<String> {
+use crate::error::Exception;
+use crate::exception;
+
+pub async fn run(command: &str) -> Result<String, Exception> {
     let span = debug_span!("shell", command);
 
     async {
@@ -18,7 +19,9 @@ pub async fn run(command: &str) -> Result<String> {
         if output.status.success() {
             Ok(stdout.to_string())
         } else {
-            Err(anyhow!("command failed, status={}", output.status.code().unwrap_or(-1)))
+            Err(exception!(
+                message = format!("command failed, status={}", output.status.code().unwrap_or(-1))
+            ))
         }
     }
     .instrument(span)

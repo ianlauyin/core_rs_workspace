@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
+use core_ng::error::Exception;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
 use core_ng::schedule::JobContext;
@@ -14,7 +14,7 @@ use tracing::warn;
 struct State {}
 
 #[tokio::main]
-pub async fn main() -> Result<()> {
+pub async fn main() -> Result<(), Exception> {
     log::init_with_action(ConsoleAppender);
 
     let shutdown = Shutdown::new();
@@ -26,13 +26,13 @@ pub async fn main() -> Result<()> {
     scheduler.start(Arc::new(State {}), signal).await
 }
 
-async fn job(_state: Arc<State>, context: JobContext) -> Result<()> {
+async fn job(_state: Arc<State>, context: JobContext) -> Result<(), Exception> {
     warn!("test");
     println!("Job executed: {}", context.name);
     Ok(())
 }
 
-async fn daily_job(_state: Arc<State>, context: JobContext) -> Result<()> {
+async fn daily_job(_state: Arc<State>, context: JobContext) -> Result<(), Exception> {
     println!("daily executed: {}", context.name);
     Ok(())
 }

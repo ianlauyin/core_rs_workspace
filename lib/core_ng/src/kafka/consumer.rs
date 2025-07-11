@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Result;
 use chrono::DateTime;
 use chrono::SecondsFormat;
 use chrono::Utc;
@@ -29,6 +28,7 @@ use tracing::info;
 
 use super::topic::Topic;
 use crate::env;
+use crate::error::Exception;
 use crate::json::from_json;
 use crate::log;
 
@@ -41,7 +41,7 @@ pub struct Message<T: DeserializeOwned> {
 }
 
 impl<T: DeserializeOwned> Message<T> {
-    pub fn payload(&self) -> Result<T> {
+    pub fn payload(&self) -> Result<T, Exception> {
         from_json(&self.payload)
     }
 }
@@ -106,7 +106,7 @@ where
     pub fn add_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
         H: Fn(Arc<S>, Message<M>) -> Fut + Copy + Send + Sync + 'static,
-        Fut: Future<Output = Result<()>> + Send + 'static,
+        Fut: Future<Output = Result<(), Exception>> + Send + 'static,
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
@@ -121,7 +121,7 @@ where
     pub fn add_bulk_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
         H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Copy + Send + Sync + 'static,
-        Fut: Future<Output = Result<()>> + Send + 'static,
+        Fut: Future<Output = Result<(), Exception>> + Send + 'static,
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
@@ -133,7 +133,7 @@ where
         self.handlers.insert(topic, Box::new(handler));
     }
 
-    pub async fn start(self, state: Arc<S>, mut shutdown_signel: broadcast::Receiver<()>) -> Result<()> {
+    pub async fn start(self, state: Arc<S>, mut shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception> {
         let handlers = self.handlers;
         let consumer: BaseConsumer = self.config.create()?;
         let topics: Vec<&str> = handlers.keys().cloned().collect();
@@ -206,7 +206,7 @@ fn poll_message_groups(
     consumer: &BaseConsumer,
     max_wait_time: Duration,
     max_records: usize,
-) -> Result<HashMap<String, Vec<BorrowedMessage>>> {
+) -> Result<HashMap<String, Vec<BorrowedMessage>>, Exception> {
     let mut messages: HashMap<String, Vec<BorrowedMessage>> = HashMap::new();
     let start_time = Instant::now();
     let mut count = 1;
@@ -234,7 +234,7 @@ async fn handle_bulk_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<M
 where
     S: Send + Sync + 'static,
     H: Fn(Arc<S>, Vec<Message<M>>) -> Fut,
-    Fut: Future<Output = Result<()>>,
+    Fut: Future<Output = Result<(), Exception>>,
     M: DeserializeOwned,
 {
     log::start_action("message", None, async {
@@ -264,7 +264,7 @@ async fn handle_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<Messag
 where
     S: Send + Sync + 'static,
     H: Fn(Arc<S>, Message<M>) -> Fut + Copy + Send + Sync + 'static,
-    Fut: Future<Output = Result<()>> + Send,
+    Fut: Future<Output = Result<(), Exception>> + Send,
     M: DeserializeOwned + Send + 'static,
 {
     let mut handles = Vec::with_capacity(messages.len());
@@ -306,7 +306,7 @@ where
 async fn handle_message<H, S, M, Fut>(topic: &'static str, message: Message<M>, handler: H, state: Arc<S>)
 where
     H: Fn(Arc<S>, Message<M>) -> Fut,
-    Fut: Future<Output = Result<()>>,
+    Fut: Future<Output = Result<(), Exception>>,
     M: DeserializeOwned,
 {
     let ref_id = message.headers.get("ref_id").map(|value| value.to_owned());

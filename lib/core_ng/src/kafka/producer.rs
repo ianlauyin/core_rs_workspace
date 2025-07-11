@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use anyhow::Result;
 use chrono::Utc;
 use rdkafka::ClientConfig;
 use rdkafka::message::Header;
@@ -15,6 +14,7 @@ use tracing::debug_span;
 
 use super::topic::Topic;
 use crate::env;
+use crate::error::Exception;
 use crate::json::to_json;
 use crate::log::current_action_id;
 
@@ -37,7 +37,7 @@ impl Producer {
         Self { producer }
     }
 
-    pub async fn send<T>(&self, topic: &Topic<T>, key: Option<String>, message: &T) -> Result<()>
+    pub async fn send<T>(&self, topic: &Topic<T>, key: Option<String>, message: &T) -> Result<(), Exception>
     where
         T: Serialize + Debug,
     {

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use axum::Router;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
 use core_ng::conf::load_conf;
+use core_ng::error::Exception;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::MessageConsumer;
 use core_ng::kafka::topic::Topic;
@@ -53,7 +53,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    fn new(config: &AppConfig) -> Result<Self> {
+    fn new(config: &AppConfig) -> Result<Self, Exception> {
         let hostname = hostname::get()?.to_string_lossy().to_string();
         let hash = &format!("{:x}", sha2::Sha256::digest(hostname))[0..6];
 
@@ -75,7 +75,7 @@ struct Topics {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Exception> {
     log::init_with_action(ConsoleAppender);
 
     let config: AppConfig = load_conf()?;

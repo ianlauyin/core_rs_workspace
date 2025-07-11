@@ -2,7 +2,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
 use chrono::DateTime;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
@@ -15,6 +14,7 @@ use tracing::info;
 use trigger::DailyTrigger;
 use trigger::FixedRateTrigger;
 
+use crate::error::Exception;
 use crate::log;
 
 mod trigger;
@@ -67,7 +67,7 @@ where
     pub fn schedule_fixed_rate<J, Fut>(&mut self, name: &'static str, job: J, interval: Duration)
     where
         J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
-        Fut: Future<Output = Result<()>> + Send + 'static,
+        Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
         let trigger = Box::new(FixedRateTrigger { interval });
         self.add_job(name, job, trigger);
@@ -76,7 +76,7 @@ where
     pub fn schedule_daily<J, Fut>(&mut self, name: &'static str, job: J, time: NaiveTime)
     where
         J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
-        Fut: Future<Output = Result<()>> + Send + 'static,
+        Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
         let trigger = Box::new(DailyTrigger {
             time_zone: self.timezone,
@@ -88,7 +88,7 @@ where
     fn add_job<J, Fut>(&mut self, name: &'static str, job: J, trigger: Box<dyn Trigger>)
     where
         J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
-        Fut: Future<Output = Result<()>> + Send + 'static,
+        Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
         let job = move |state: Arc<S>, context| process_job(job, state, context);
         self.schedules.push(Schedule {
@@ -98,7 +98,7 @@ where
         });
     }
 
-    pub async fn start(self, state: Arc<S>, shutdown_signel: broadcast::Receiver<()>) -> Result<()> {
+    pub async fn start(self, state: Arc<S>, shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception> {
         let mut handles = vec![];
         for schedule in self.schedules {
             let state = state.clone();
@@ -143,7 +143,7 @@ where
 async fn process_job<S, J, Fut>(job: J, state: Arc<S>, context: JobContext)
 where
     J: Fn(Arc<S>, JobContext) -> Fut,
-    Fut: Future<Output = Result<()>>,
+    Fut: Future<Output = Result<(), Exception>>,
 {
     log::start_action("job", None, async move {
         let name = context.name;

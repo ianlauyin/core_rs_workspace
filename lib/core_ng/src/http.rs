@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::io;
 use std::time::Duration;
 
-use anyhow::Result;
 use bytes::Bytes;
 use futures::AsyncBufReadExt;
 use futures::Stream;
@@ -17,6 +16,8 @@ use reqwest::Url;
 use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
+
+use crate::error::Exception;
 
 pub struct HttpClient {
     client: reqwest::Client,
@@ -75,7 +76,7 @@ impl HttpResponse {
             .lines()
     }
 
-    pub async fn text(self) -> Result<String> {
+    pub async fn text(self) -> Result<String, Exception> {
         let body = self.response.text().await?;
         debug!(body, "[response]");
         Ok(body)
@@ -83,7 +84,7 @@ impl HttpResponse {
 }
 
 impl HttpClient {
-    pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse> {
+    pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Exception> {
         let span = debug_span!("http_client", url = request.url, method = ?request.method);
         async {
             debug!(method = ?request.method, "[request]");

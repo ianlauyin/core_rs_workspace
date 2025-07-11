@@ -5,9 +5,9 @@ use std::io::LineWriter;
 use std::io::Write;
 use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use core_ng::error::Exception;
 use core_ng::kafka::consumer::Message;
 use rdkafka::message::ToBytes;
 use serde::Deserialize;
@@ -32,7 +32,10 @@ pub struct EventMessage {
     info: HashMap<String, String>,
 }
 
-pub async fn event_message_handler(state: Arc<AppState>, messages: Vec<Message<EventMessage>>) -> Result<()> {
+pub async fn event_message_handler(
+    state: Arc<AppState>,
+    messages: Vec<Message<EventMessage>>,
+) -> Result<(), Exception> {
     let now = Utc::now().date_naive();
     let path = local_file_path("event", now, &state)?;
 

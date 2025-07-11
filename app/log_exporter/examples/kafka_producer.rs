@@ -1,4 +1,4 @@
-use anyhow::Result;
+use core_ng::error::Exception;
 use core_ng::kafka::producer::Producer;
 use core_ng::kafka::producer::ProducerConfig;
 use core_ng::kafka::topic::Topic;
@@ -11,7 +11,7 @@ struct TestMessage {
 }
 
 #[tokio::main]
-pub async fn main() -> Result<()> {
+pub async fn main() -> Result<(), Exception> {
     let producer = Producer::new(ProducerConfig {
         bootstrap_servers: "dev.internal:9092",
     });

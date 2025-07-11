@@ -6,21 +6,31 @@ use axum::response::Response;
 use tracing::error;
 use tracing::warn;
 
+use crate::error::Exception;
+
 pub type HttpResult<T> = Result<T, HttpError>;
 
 #[derive(Debug)]
 pub enum HttpError {
     NotFound(String),
-    InternalError(anyhow::Error),
+    InternalError(Exception),
 }
 
 impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
         match self {
             HttpError::InternalError(error) => {
-                let backtrace = format!("{}", error.backtrace());
-                error!(error_code = "INTERNAL_ERROR", backtrace, "Internal Error: {error}");
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Error: {error}")).into_response()
+                error!(
+                    error_code = "INTERNAL_ERROR",
+                    backtrace = format!("{error}"),
+                    "{}",
+                    error.message
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Internal Error: {}", error.message),
+                )
+                    .into_response()
             }
             HttpError::NotFound(error) => {
                 warn!(error_code = "NOT_FOUND", "Not Found: {error}");
@@ -32,7 +42,7 @@ impl IntoResponse for HttpError {
 
 impl<E> From<E> for HttpError
 where
-    E: Into<anyhow::Error>,
+    E: Into<Exception>,
 {
     fn from(err: E) -> Self {
         Self::InternalError(err.into())

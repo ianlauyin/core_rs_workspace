@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use anyhow::Result;
 use serde::de::DeserializeOwned;
 use tracing::info;
 
+use crate::error::Exception;
 use crate::json::load_file;
 
-pub fn load_conf<T>() -> Result<T>
+pub fn load_conf<T>() -> Result<T, Exception>
 where
     T: DeserializeOwned + Default,
 {

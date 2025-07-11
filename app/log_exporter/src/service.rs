@@ -2,15 +2,15 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::Datelike;
 use chrono::NaiveDate;
+use core_ng::error::Exception;
 use core_ng::shell;
 use tracing::info;
 
 use crate::AppState;
 
-pub fn local_file_path(name: &str, date: NaiveDate, state: &Arc<AppState>) -> Result<PathBuf> {
+pub fn local_file_path(name: &str, date: NaiveDate, state: &Arc<AppState>) -> Result<PathBuf, Exception> {
     let dir = &state.log_dir;
     let year = date.year();
     let hash = &state.hash;
@@ -23,7 +23,7 @@ pub fn local_file_path(name: &str, date: NaiveDate, state: &Arc<AppState>) -> Re
     Ok(path)
 }
 
-pub fn cleanup_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()> {
+pub fn cleanup_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<(), Exception> {
     info!("cleaning up archives, date={date}");
 
     let action_log_path = local_file_path("action", date, state)?;
@@ -39,7 +39,7 @@ pub fn cleanup_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()> {
     Ok(())
 }
 
-pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<()> {
+pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<(), Exception> {
     info!("uploading archives, date={date}");
 
     let action_log_path = local_file_path("action", date, state)?;
@@ -63,7 +63,7 @@ async fn convert_parquet_and_upload(
     local_path_buf: PathBuf,
     remote_path: &str,
     columns: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), Exception> {
     let local_path = local_path_buf.to_string_lossy();
     let parquet_path_buf = local_path_buf.with_extension("parquet");
     let parquet_path = parquet_path_buf.to_string_lossy();

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use anyhow::Result;
-use anyhow::anyhow;
+use core_ng::error::Exception;
+use core_ng::exception;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
 use core_ng::shell;
@@ -37,8 +37,8 @@ async fn test_action() {
 
         task::spawn_action("some-task", async move {
             *y.lock().unwrap() = 2;
-            warn!("y = {y:?}");
-            shell::run("echo1 'Hello, World!'").await?;
+            warn!(error_code = "TEST", "y = {y:?}");
+            // shell::run("echo1 'Hello, World!'").await?;
             Ok(())
         });
 
@@ -52,7 +52,7 @@ async fn test_action() {
 }
 
 #[instrument]
-async fn handle_request(success: bool) -> Result<()> {
+async fn handle_request(success: bool) -> Result<(), Exception> {
     let span = info_span!("http", test_value = field::Empty, elapsed = field::Empty);
     async {
         info!(request_id = 123, "Processing request,");
@@ -84,7 +84,9 @@ async fn handle_request(success: bool) -> Result<()> {
     } else {
         warn!(status = "failure", "Something went wrong,");
         error!(reason = "database_error", "Could not connect to database,");
-        Err(anyhow!("key length must be 16 characters, got {:?}", "key"))
+        Err(exception!(
+            message = format!("key length must be 16 characters, got {:?}", "key")
+        ))
     }
 }
 

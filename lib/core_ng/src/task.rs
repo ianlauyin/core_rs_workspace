@@ -1,7 +1,6 @@
 use std::future::Future;
 use std::sync::LazyLock;
 
-use anyhow::Result;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument;
@@ -9,6 +8,7 @@ use tracing::Span;
 use tracing::debug;
 use tracing::info;
 
+use crate::error::Exception;
 use crate::log;
 use crate::log::current_action_id;
 
@@ -16,7 +16,7 @@ static TASK_TRACKER: LazyLock<TaskTracker> = LazyLock::new(TaskTracker::new);
 
 pub fn spawn_action<T>(name: &'static str, task: T)
 where
-    T: Future<Output = Result<()>> + Send + 'static,
+    T: Future<Output = Result<(), Exception>> + Send + 'static,
 {
     let ref_id = current_action_id();
     TASK_TRACKER.spawn(async move {
@@ -28,9 +28,9 @@ where
     });
 }
 
-pub fn spawn_task<T>(task: T) -> JoinHandle<Result<()>>
+pub fn spawn_task<T>(task: T) -> JoinHandle<Result<(), Exception>>
 where
-    T: Future<Output = Result<()>> + Send + 'static,
+    T: Future<Output = Result<(), Exception>> + Send + 'static,
 {
     let span = Span::current();
     TASK_TRACKER.spawn(task.instrument(span))
