@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde::de::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 
 pub fn load_file<T>(path: &Path) -> Result<T, Exception>
 where

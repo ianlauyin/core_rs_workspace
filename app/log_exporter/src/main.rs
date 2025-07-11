@@ -4,7 +4,7 @@ use axum::Router;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
 use core_ng::conf::load_conf;
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::MessageConsumer;
 use core_ng::kafka::topic::Topic;

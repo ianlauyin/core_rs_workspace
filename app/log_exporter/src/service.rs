@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::shell;
 use tracing::info;
 

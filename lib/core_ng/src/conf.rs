@@ -3,7 +3,7 @@ use std::path::Path;
 use serde::de::DeserializeOwned;
 use tracing::info;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::json::load_file;
 
 pub fn load_conf<T>() -> Result<T, Exception>

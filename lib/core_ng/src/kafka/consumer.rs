@@ -28,7 +28,7 @@ use tracing::info;
 
 use super::topic::Topic;
 use crate::env;
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::json::from_json;
 use crate::log;
 

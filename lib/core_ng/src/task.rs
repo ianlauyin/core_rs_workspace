@@ -8,7 +8,7 @@ use tracing::Span;
 use tracing::debug;
 use tracing::info;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::log;
 use crate::log::current_action_id;
 

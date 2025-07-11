@@ -17,7 +17,7 @@ use tracing::Instrument;
 use tracing::debug;
 use tracing::debug_span;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 
 pub struct HttpClient {
     client: reqwest::Client,

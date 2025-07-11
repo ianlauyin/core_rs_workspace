@@ -1,4 +1,4 @@
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::kafka::producer::Producer;
 use core_ng::kafka::producer::ProducerConfig;
 use core_ng::kafka::topic::Topic;

@@ -14,7 +14,7 @@ use tracing::info;
 use trigger::DailyTrigger;
 use trigger::FixedRateTrigger;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::log;
 
 mod trigger;

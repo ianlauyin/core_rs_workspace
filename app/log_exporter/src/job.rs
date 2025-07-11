@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Days;
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::schedule::JobContext;
 
 use crate::AppState;

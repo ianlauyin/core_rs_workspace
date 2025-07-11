@@ -14,7 +14,7 @@ use tracing::debug_span;
 
 use super::topic::Topic;
 use crate::env;
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::json::to_json;
 use crate::log::current_action_id;
 

@@ -69,7 +69,7 @@ macro_rules! exception {
             code: Some($code.to_string()),
             message: $message.to_string(),
             location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: Some(Box::new($source)),
+            source: Some(Box::new($source.into())),
         }
     };
 }

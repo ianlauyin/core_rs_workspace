@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use core_ng::error::Exception;
 use core_ng::exception;
+use core_ng::exception::Exception;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
 use core_ng::shell;

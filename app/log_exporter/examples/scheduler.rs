@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use chrono::FixedOffset;
 use chrono::NaiveTime;
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::log;
 use core_ng::log::ConsoleAppender;
 use core_ng::schedule::JobContext;

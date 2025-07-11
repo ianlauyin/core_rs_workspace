@@ -11,7 +11,7 @@ use tokio::sync::broadcast;
 use tracing::debug;
 use tracing::info;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 use crate::log;
 
 pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::Receiver<()>) -> Result<(), Exception> {

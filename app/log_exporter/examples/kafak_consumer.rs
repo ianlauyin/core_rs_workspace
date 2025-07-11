@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use core_ng::error::Exception;
+use core_ng::exception::Exception;
 use core_ng::kafka::consumer::ConsumerConfig;
 use core_ng::kafka::consumer::Message;
 use core_ng::kafka::consumer::MessageConsumer;

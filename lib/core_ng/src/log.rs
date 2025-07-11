@@ -9,7 +9,8 @@ use layer::ActionLogLayer;
 use serde::Serialize;
 use tokio::task_local;
 use tracing::Instrument;
-use tracing::error;
+use tracing::Level;
+use tracing::event;
 use tracing::info_span;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::Layer;
@@ -17,7 +18,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uuid::Uuid;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 
 mod appender;
 mod layer;
@@ -74,9 +75,9 @@ where
                 if let Err(e) = result {
                     let message = &e.message;
                     if let Some(ref error_code) = e.code {
-                        error!(error_code, backtrace = e.to_string(), "{message}");
+                        event!(Level::ERROR, error_code, backtrace = e.to_string(), "{message}");
                     } else {
-                        error!(backtrace = e.to_string(), "{message}");
+                        event!(Level::ERROR, backtrace = e.to_string(), "{message}");
                     }
                 }
             }

@@ -6,7 +6,7 @@ use axum::response::Response;
 use tracing::error;
 use tracing::warn;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 
 pub type HttpResult<T> = Result<T, HttpError>;
 

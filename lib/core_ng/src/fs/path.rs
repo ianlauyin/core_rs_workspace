@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::error::Exception;
+use crate::exception::Exception;
 
 pub trait PathExt {
     fn file_extension(&self) -> Result<&str, Exception>;
