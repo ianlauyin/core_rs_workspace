@@ -38,7 +38,7 @@ async fn test_action() {
         task::spawn_action("some-task", async move {
             *y.lock().unwrap() = 2;
             warn!(error_code = "TEST", "y = {y:?}");
-            // shell::run("echo1 'Hello, World!'").await?;
+            shell::run("echo1 'Hello, World!'").await?;
             Ok(())
         });
 

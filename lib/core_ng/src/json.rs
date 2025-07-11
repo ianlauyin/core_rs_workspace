@@ -15,19 +15,27 @@ where
     let json = read_to_string(path).map_err(|err| {
         exception!(
             message = format!("failed to read file, path={}", path.to_string_lossy()),
-            source = &err
+            source = err.into()
         )
     })?;
-    serde_json::from_str(&json)
-        .map_err(|err| exception!(message = format!("failed to deserialize, json={json}"), source = &err))
+    serde_json::from_str(&json).map_err(|err| {
+        exception!(
+            message = format!("failed to deserialize, json={json}"),
+            source = err.into()
+        )
+    })
 }
 
 pub fn from_json<'a, T>(json: &'a str) -> Result<T, Exception>
 where
     T: Deserialize<'a>,
 {
-    serde_json::from_str(json)
-        .map_err(|err| exception!(message = format!("failed to deserialize, json={json}"), source = &err))
+    serde_json::from_str(json).map_err(|err| {
+        exception!(
+            message = format!("failed to deserialize, json={json}"),
+            source = err.into()
+        )
+    })
 }
 
 pub fn to_json<T>(object: &T) -> Result<String, Exception>
@@ -37,7 +45,7 @@ where
     serde_json::to_string(object).map_err(|err| {
         exception!(
             message = format!("failed to serialize, object={object:?}"),
-            source = &err
+            source = err.into()
         )
     })
 }

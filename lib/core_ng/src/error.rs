@@ -41,74 +41,57 @@ impl Display for Exception {
 #[macro_export]
 macro_rules! exception {
     (message = $message:expr) => {
-        Exception::new(
-            None,
-            $message.to_string(),
-            Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            None,
-        )
+        Exception {
+            code: None,
+            message: $message.to_string(),
+            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
+            source: None,
+        }
     };
     (code = $code:expr, message = $message:expr) => {
-        Exception::new(
-            Some($code.to_string()),
-            $message.to_string(),
-            Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            None,
-        )
+        Exception {
+            code: Some($code.to_string()),
+            message: $message.to_string(),
+            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
+            source: None,
+        }
     };
     (message = $message:expr, source = $source:expr) => {
-        Exception::new(
-            None,
-            $message.to_string(),
-            Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            Some($source),
-        )
+        Exception {
+            code: None,
+            message: $message.to_string(),
+            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
+            source: Some(Box::new($source)),
+        }
     };
     (code = $code:expr, message = $message:expr, source = $source:expr) => {
-        Exception::new(
-            Some($code.to_string()),
-            $message.to_string(),
-            Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            Some($source),
-        )
+        Exception {
+            code: Some($code.to_string()),
+            message: $message.to_string(),
+            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
+            source: Some(Box::new($source)),
+        }
     };
 }
 
-impl Exception {
-    pub fn new(
-        code: Option<String>,
-        message: String,
-        location: Option<String>,
-        source: Option<&(dyn Error + 'static)>,
-    ) -> Self {
-        Exception {
-            code,
-            message,
-            location,
-            source: Self::from(source),
-        }
+fn source(source: Option<&(dyn Error + 'static)>) -> Option<Box<Exception>> {
+    let mut sources = Vec::new();
+    let mut current_source = source;
+    while let Some(target) = current_source {
+        sources.push(target);
+        current_source = target.source();
     }
 
-    fn from(source: Option<&(dyn Error + 'static)>) -> Option<Box<Exception>> {
-        let mut sources = Vec::new();
-        let mut current_source = source;
-        while let Some(target) = current_source {
-            sources.push(target);
-            current_source = target.source();
-        }
-
-        let mut result = None;
-        for target in sources.into_iter().rev() {
-            result = Some(Box::new(Exception {
-                code: None,
-                message: target.to_string(),
-                location: None,
-                source: result,
-            }));
-        }
-
-        result
+    let mut result = None;
+    for target in sources.into_iter().rev() {
+        result = Some(Box::new(Exception {
+            code: None,
+            message: target.to_string(),
+            location: None,
+            source: result,
+        }));
     }
+    result
 }
 
 impl<T> From<T> for Exception
@@ -116,6 +99,11 @@ where
     T: Error + 'static,
 {
     fn from(error: T) -> Self {
-        Exception::new(None, error.to_string(), None, Some(&error))
+        Exception {
+            code: None,
+            message: error.to_string(),
+            location: None,
+            source: source(error.source()),
+        }
     }
 }

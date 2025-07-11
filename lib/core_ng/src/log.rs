@@ -72,10 +72,11 @@ where
             async {
                 let result = task.await;
                 if let Err(e) = result {
+                    let message = &e.message;
                     if let Some(ref error_code) = e.code {
-                        error!(error_code, backtrace = format!("{e}"), "{}", e.message);
+                        error!(error_code, backtrace = e.to_string(), "{message}");
                     } else {
-                        error!(backtrace = format!("{e}"), "{}", e.message);
+                        error!(backtrace = e.to_string(), "{message}");
                     }
                 }
             }
