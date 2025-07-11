@@ -17,6 +17,7 @@ use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::consumer::CommitMode;
 use rdkafka::consumer::Consumer;
+use rdkafka::error::KafkaError;
 use rdkafka::message::BorrowedMessage;
 use rdkafka::message::Headers;
 use rdkafka::util::Timeout;
@@ -206,7 +207,7 @@ fn poll_message_groups(
     consumer: &BaseConsumer,
     max_wait_time: Duration,
     max_records: usize,
-) -> Result<HashMap<String, Vec<BorrowedMessage>>, Exception> {
+) -> Result<HashMap<String, Vec<BorrowedMessage>>, KafkaError> {
     let mut messages: HashMap<String, Vec<BorrowedMessage>> = HashMap::new();
     let start_time = Instant::now();
     let mut count = 1;

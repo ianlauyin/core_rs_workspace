@@ -61,7 +61,7 @@ macro_rules! exception {
             code: None,
             message: $message.to_string(),
             location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: Some(Box::new($source)),
+            source: Some(Box::new($source.into())),
         }
     };
     (code = $code:expr, message = $message:expr, source = $source:expr) => {
@@ -83,10 +83,10 @@ fn source(source: Option<&(dyn Error + 'static)>) -> Option<Box<Exception>> {
     }
 
     let mut result = None;
-    for target in sources.into_iter().rev() {
+    for error in sources.into_iter().rev() {
         result = Some(Box::new(Exception {
             code: None,
-            message: target.to_string(),
+            message: error.to_string(),
             location: None,
             source: result,
         }));

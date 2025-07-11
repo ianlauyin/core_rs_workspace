@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::routing::put;
 use chrono::NaiveDate;
 use core_ng::task;
-use core_ng::web::error::HttpError;
+use core_ng::web::error::HttpResult;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -25,7 +25,7 @@ struct UploadRequest {
 }
 
 #[debug_handler]
-async fn upload(state: State<Arc<AppState>>, Json(request): Json<UploadRequest>) -> Result<StatusCode, HttpError> {
+async fn upload(state: State<Arc<AppState>>, Json(request): Json<UploadRequest>) -> HttpResult<StatusCode> {
     task::spawn_action("upload", async move { upload_archive(request.date, &state).await });
     Ok(StatusCode::NO_CONTENT)
 }

@@ -296,6 +296,7 @@ impl Visit for LogVisitor<'_> {
         if field.name() == "backtrace" {
             write!(self.0, "\n{value}").unwrap();
         } else if field.name() == "error_code" {
+            // do not log error_code here, it is handled in ErrorVisitor
         } else {
             write!(self.0, "{}={} ", field.name(), value).unwrap();
         }
