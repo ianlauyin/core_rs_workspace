@@ -18,4 +18,3 @@ reqwest.workspace = true
 
 hostname = "*"
 sha2 = "*"
-url = "*"
