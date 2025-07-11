@@ -333,27 +333,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "core_ng"
-version = "0.1.1"
-dependencies = [
- "axum",
- "axum-server",
- "bytes",
- "chrono",
- "futures",
- "indexmap",
- "rdkafka",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -434,6 +413,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "framework"
+version = "0.1.1"
+dependencies = [
+ "axum",
+ "axum-server",
+ "bytes",
+ "chrono",
+ "futures",
+ "indexmap",
+ "rdkafka",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -1032,7 +1032,7 @@ version = "0.2.0"
 dependencies = [
  "axum",
  "chrono",
- "core_ng",
+ "framework",
  "hostname",
  "rdkafka",
  "reqwest",

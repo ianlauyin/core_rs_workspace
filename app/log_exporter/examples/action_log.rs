@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use core_ng::exception;
-use core_ng::exception::Exception;
-use core_ng::log;
-use core_ng::log::ConsoleAppender;
-use core_ng::shell;
-use core_ng::task;
+use framework::exception;
+use framework::exception::Exception;
+use framework::log;
+use framework::log::ConsoleAppender;
+use framework::shell;
+use framework::task;
 use tokio::task::yield_now;
 use tracing::Instrument;
 use tracing::Span;

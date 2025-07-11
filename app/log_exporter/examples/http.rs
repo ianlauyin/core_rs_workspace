@@ -1,8 +1,8 @@
-use core_ng::http::HttpClient;
-use core_ng::http::HttpMethod::POST;
-use core_ng::http::HttpRequest;
-use core_ng::log;
-use core_ng::log::ConsoleAppender;
+use framework::http::HttpClient;
+use framework::http::HttpMethod::POST;
+use framework::http::HttpRequest;
+use framework::log;
+use framework::log::ConsoleAppender;
 use tracing::debug;
 use tracing::warn;
 

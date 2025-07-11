@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use chrono::FixedOffset;
 use chrono::NaiveTime;
-use core_ng::exception::Exception;
-use core_ng::log;
-use core_ng::log::ConsoleAppender;
-use core_ng::schedule::JobContext;
-use core_ng::schedule::Scheduler;
-use core_ng::shutdown::Shutdown;
+use framework::exception::Exception;
+use framework::log;
+use framework::log::ConsoleAppender;
+use framework::schedule::JobContext;
+use framework::schedule::Scheduler;
+use framework::shutdown::Shutdown;
 use tracing::warn;
 
 struct State {}

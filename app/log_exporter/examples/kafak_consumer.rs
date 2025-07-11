@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use core_ng::exception::Exception;
-use core_ng::kafka::consumer::ConsumerConfig;
-use core_ng::kafka::consumer::Message;
-use core_ng::kafka::consumer::MessageConsumer;
-use core_ng::kafka::producer::Producer;
-use core_ng::kafka::producer::ProducerConfig;
-use core_ng::kafka::topic::Topic;
-use core_ng::log;
-use core_ng::log::ConsoleAppender;
-use core_ng::shutdown::Shutdown;
+use framework::exception::Exception;
+use framework::kafka::consumer::ConsumerConfig;
+use framework::kafka::consumer::Message;
+use framework::kafka::consumer::MessageConsumer;
+use framework::kafka::producer::Producer;
+use framework::kafka::producer::ProducerConfig;
+use framework::kafka::topic::Topic;
+use framework::log;
+use framework::log::ConsoleAppender;
+use framework::shutdown::Shutdown;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc;

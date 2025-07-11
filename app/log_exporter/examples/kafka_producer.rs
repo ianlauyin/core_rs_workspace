@@ -1,7 +1,7 @@
-use core_ng::exception::Exception;
-use core_ng::kafka::producer::Producer;
-use core_ng::kafka::producer::ProducerConfig;
-use core_ng::kafka::topic::Topic;
+use framework::exception::Exception;
+use framework::kafka::producer::Producer;
+use framework::kafka::producer::ProducerConfig;
+use framework::kafka::topic::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 

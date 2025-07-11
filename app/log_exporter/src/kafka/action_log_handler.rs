@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use core_ng::exception::Exception;
-use core_ng::json;
-use core_ng::kafka::consumer::Message;
+use framework::exception::Exception;
+use framework::json;
+use framework::kafka::consumer::Message;
 use rdkafka::message::ToBytes;
 use serde::Deserialize;
 use serde::Serialize;
