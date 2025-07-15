@@ -3,40 +3,54 @@ use std::fmt::Display;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
-use tracing::error;
-use tracing::warn;
 
 use crate::exception::Exception;
+use crate::log;
 
 pub type HttpResult<T> = Result<T, HttpError>;
 
 #[derive(Debug)]
-pub enum HttpError {
-    NotFound(String),
-    InternalError(Exception),
+pub struct HttpError {
+    status_code: StatusCode,
+    exception: Exception,
+}
+
+impl HttpError {
+    pub fn internal_error<E>(error: E) -> Self
+    where
+        E: Into<Exception>,
+    {
+        Self {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            exception: error.into(),
+        }
+    }
+
+    pub fn not_found<E>(error: E) -> Self
+    where
+        E: Into<Exception>,
+    {
+        Self {
+            status_code: StatusCode::NOT_FOUND,
+            exception: error.into(),
+        }
+    }
+
+    pub fn forbidden<E>(error: E) -> Self
+    where
+        E: Into<Exception>,
+    {
+        Self {
+            status_code: StatusCode::FORBIDDEN,
+            exception: error.into(),
+        }
+    }
 }
 
 impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
-        match self {
-            HttpError::InternalError(error) => {
-                error!(
-                    error_code = "INTERNAL_ERROR",
-                    backtrace = format!("{error}"),
-                    "{}",
-                    error.message
-                );
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Internal Error: {}", error.message),
-                )
-                    .into_response()
-            }
-            HttpError::NotFound(error) => {
-                warn!(error_code = "NOT_FOUND", "Not Found: {error}");
-                (StatusCode::NOT_FOUND, format!("Not Found: {error}")).into_response()
-            }
-        }
+        log::log_exception(&self.exception);
+        (self.status_code, self.exception.message).into_response()
     }
 }
 
@@ -45,7 +59,7 @@ where
     E: Into<Exception>,
 {
     fn from(err: E) -> Self {
-        Self::InternalError(err.into())
+        Self::internal_error(err)
     }
 }
 

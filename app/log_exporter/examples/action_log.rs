@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use framework::exception;
 use framework::exception::Exception;
+use framework::exception::Severity;
 use framework::log;
 use framework::log::ConsoleAppender;
 use framework::shell;
@@ -82,9 +83,15 @@ async fn handle_request(success: bool) -> Result<(), Exception> {
         info!(status = "success", "Request completed successfully,");
         Ok(())
     } else {
-        warn!(status = "failure", "Something went wrong,");
-        error!(reason = "database_error", "Could not connect to database,");
+        warn!(error_code = "SOMETHING", status = "failure", "Something went wrong,");
+        error!(
+            error_code = "DB",
+            reason = "database_error",
+            "Could not connect to database,"
+        );
         Err(exception!(
+            severity = Severity::Warn,
+            code = "E001",
             message = format!("key length must be 16 characters, got {:?}", "key")
         ))
     }

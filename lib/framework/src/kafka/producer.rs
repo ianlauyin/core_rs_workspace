@@ -19,7 +19,7 @@ use crate::json::to_json;
 use crate::log::current_action_id;
 
 pub struct ProducerConfig {
-    pub bootstrap_servers: &'static str,
+    pub bootstrap_servers: String,
 }
 
 pub struct Producer {

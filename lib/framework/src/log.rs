@@ -10,17 +10,17 @@ use serde::Serialize;
 use tokio::task_local;
 use tracing::Instrument;
 use tracing::Level;
-use tracing::event;
 use tracing::info_span;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use uuid::Uuid;
 
 use crate::exception::Exception;
+use crate::exception::Severity;
 
 mod appender;
+mod id_generator;
 mod layer;
 
 pub trait ActionLogAppender {
@@ -61,11 +61,33 @@ where
         .init();
 }
 
+macro_rules! log_event {
+    (level = $level:ident, error_code = $error_code:expr, $($arg:tt)+) => {
+        match $level {
+            ::tracing::Level::TRACE => {},
+            ::tracing::Level::DEBUG => {},
+            ::tracing::Level::INFO => {},
+            ::tracing::Level::WARN => {
+                match $error_code {
+                    Some(ref error_code) => ::tracing::warn!(error_code, $($arg)+),
+                    None => ::tracing::warn!($($arg)+),
+                }
+            },
+            ::tracing::Level::ERROR => {
+                match $error_code {
+                    Some(ref error_code) => ::tracing::error!(error_code, $($arg)+),
+                    None => ::tracing::error!($($arg)+),
+                }
+            }
+        }
+    };
+}
+
 pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
 where
     T: Future<Output = Result<(), Exception>>,
 {
-    let action_id = Uuid::now_v7().to_string();
+    let action_id = id_generator::random_id();
     let action_span = info_span!("action", action, action_id, ref_id);
     CURRENT_ACTION_ID
         .scope(
@@ -73,17 +95,26 @@ where
             async {
                 let result = task.await;
                 if let Err(e) = result {
-                    let message = &e.message;
-                    if let Some(ref error_code) = e.code {
-                        event!(Level::ERROR, error_code, backtrace = e.to_string(), "{message}");
-                    } else {
-                        event!(Level::ERROR, backtrace = e.to_string(), "{message}");
-                    }
+                    log_exception(&e);
                 }
             }
             .instrument(action_span),
         )
         .await;
+}
+
+pub(crate) fn log_exception(e: &Exception) {
+    let level = match e.severity {
+        Severity::Warn => Level::WARN,
+        Severity::Error => Level::ERROR,
+    };
+    let message = &e.message;
+    log_event!(
+        level = level,
+        error_code = e.code,
+        backtrace = e.to_string(),
+        "{message}"
+    );
 }
 
 pub fn current_action_id() -> Option<String> {

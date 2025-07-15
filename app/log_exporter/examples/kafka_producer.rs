@@ -13,7 +13,7 @@ struct TestMessage {
 #[tokio::main]
 pub async fn main() -> Result<(), Exception> {
     let producer = Producer::new(ProducerConfig {
-        bootstrap_servers: "dev.internal:9092",
+        bootstrap_servers: "dev.internal:9092".to_string(),
     });
 
     let topic = Topic::new("test");

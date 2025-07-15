@@ -140,61 +140,50 @@ thread={:?}"#,
                 let seconds = total_seconds % 60;
                 let nanos = elapsed.subsec_nanos();
 
-                let mut log_string = String::new();
-                write!(log_string, "{minutes:02}:{seconds:02}.{nanos:09} ").unwrap();
+                let mut log = String::new();
+                write!(log, "{minutes:02}:{seconds:02}.{nanos:09} ").unwrap();
 
                 let metadata = event.metadata();
                 let level = metadata.level();
                 if level <= &Level::INFO {
-                    write!(log_string, "{level} ").unwrap();
+                    write!(log, "{level} ").unwrap();
+                }
 
-                    if level == &Level::ERROR || level == &Level::WARN {
-                        let result = if level == &Level::ERROR {
-                            ActionResult::Error
-                        } else {
-                            ActionResult::Warn
-                        };
+                write!(log, "{}:{} ", metadata.target(), metadata.line().unwrap_or(0)).unwrap();
 
-                        if action_log.result.level() < result.level() {
-                            action_log.result = result;
-                            let mut error_visitor = ErrorVisitor {
-                                message: None,
-                                code: None,
-                            };
-                            event.record(&mut error_visitor);
-                            action_log.error_code = error_visitor.code;
-                            action_log.error_message = error_visitor.message;
+                if level == &Level::ERROR || level == &Level::WARN {
+                    let mut visitor = ErrorVisitor {
+                        message: None,
+                        code: None,
+                    };
+                    event.record(&mut visitor);
+                    if let Some(ref error_code) = visitor.code {
+                        write!(log, "[{error_code}] ").unwrap();
+                    }
 
-                            if let Some(ref error_code) = action_log.error_code {
-                                write!(log_string, "[{error_code}] ").unwrap();
-                            }
-                        }
+                    let result = if level == &Level::ERROR {
+                        ActionResult::Error
+                    } else {
+                        ActionResult::Warn
+                    };
+
+                    if action_log.result.level() < result.level() {
+                        action_log.result = result;
+                        action_log.error_code = visitor.code;
+                        action_log.error_message = visitor.message;
                     }
                 }
 
-                write!(log_string, "{}:{} ", metadata.target(), metadata.line().unwrap_or(0)).unwrap();
-
-                let mut visitor = LogVisitor(&mut log_string);
+                let mut visitor = LogVisitor(&mut log);
                 event.record(&mut visitor);
+                action_log.logs.push(log);
 
-                action_log.logs.push(log_string);
-
-                // hanldle "context" event
-                let mut context_visitor = ContextVisitor { context: None };
-                event.record(&mut context_visitor);
-                if let Some(context) = context_visitor.context {
-                    action_log.context.extend(context);
-                }
-
-                // hanldle "stats" event
-                let mut stats_visitor = StatsVisitor { stats: None };
-                event.record(&mut stats_visitor);
-                if let Some(stats) = stats_visitor.stats {
-                    for (key, value) in stats {
-                        let stats_value = action_log.stats.entry(key.to_owned()).or_default();
-                        *stats_value += value;
-                    }
-                }
+                // hanldle "context" and "stats" event
+                let mut visitor = ContextVisitor {
+                    action_log,
+                    context_type: None,
+                };
+                event.record(&mut visitor);
             }
         }
     }
@@ -311,35 +300,17 @@ impl Visit for LogVisitor<'_> {
     }
 }
 
-struct ContextVisitor {
-    context: Option<IndexMap<&'static str, String>>,
+enum ContextType {
+    Context,
+    Stats,
 }
 
-impl Visit for ContextVisitor {
-    fn record_str(&mut self, field: &Field, value: &str) {
-        if let Some(ref mut context) = self.context {
-            context.insert(field.name(), value.to_owned());
-        }
-    }
-
-    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
-        if field.name() == "message" {
-            self.context = if format!("{value:?}") == "context" {
-                Some(IndexMap::new())
-            } else {
-                None
-            };
-        } else if let Some(ref mut context) = self.context {
-            context.insert(field.name(), format!("{value:?}"));
-        }
-    }
+struct ContextVisitor<'a> {
+    action_log: &'a mut ActionLog,
+    context_type: Option<ContextType>,
 }
 
-struct StatsVisitor {
-    stats: Option<IndexMap<&'static str, u128>>,
-}
-
-impl Visit for StatsVisitor {
+impl Visit for ContextVisitor<'_> {
     fn record_f64(&mut self, field: &Field, value: f64) {
         self.record_u128(field, value as u128);
     }
@@ -357,18 +328,28 @@ impl Visit for StatsVisitor {
     }
 
     fn record_u128(&mut self, field: &Field, value: u128) {
-        if let Some(ref mut stats) = self.stats {
-            stats.insert(field.name(), value);
+        if let Some(ContextType::Stats) = self.context_type {
+            let stats_value = self.action_log.stats.entry(field.name().to_owned()).or_default();
+            *stats_value += value;
+        }
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if let Some(ContextType::Context) = self.context_type {
+            self.action_log.context.insert(field.name(), value.to_owned());
         }
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
         if field.name() == "message" {
-            self.stats = if format!("{value:?}") == "stats" {
-                Some(IndexMap::new())
-            } else {
-                None
-            };
+            let value = format!("{value:?}");
+            if value == "context" {
+                self.context_type = Some(ContextType::Context);
+            } else if value == "stats" {
+                self.context_type = Some(ContextType::Stats);
+            }
+        } else if let Some(ContextType::Context) = self.context_type {
+            self.action_log.context.insert(field.name(), format!("{value:?}"));
         }
     }
 }

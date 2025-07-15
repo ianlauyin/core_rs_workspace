@@ -3,10 +3,16 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 pub struct Exception {
+    pub severity: Severity,
     pub code: Option<String>,
     pub message: String,
     pub location: Option<String>,
     pub source: Option<Box<Exception>>,
+}
+
+pub enum Severity {
+    Warn,
+    Error,
 }
 
 impl Debug for Exception {
@@ -40,38 +46,28 @@ impl Display for Exception {
 
 #[macro_export]
 macro_rules! exception {
-    (message = $message:expr) => {
-        Exception {
-            code: None,
+    ($(severity = $severity:expr,)? $(code = $code:expr,)? message = $message:expr $(,source = $source:expr)?) => {{
+        let severity = $crate::exception::Severity::Error;
+        $(
+            let severity = $severity;
+        )?
+        let code: Option<String> = None;
+        $(
+            let code = Some($code.to_string());
+        )?
+        let source: Option<Box<$crate::exception::Exception>> = None;
+        $(
+            drop(source);
+            let source = Some(Box::new($source.into()));
+        )?
+        $crate::exception::Exception {
+            severity,
+            code,
             message: $message.to_string(),
             location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: None,
+            source,
         }
-    };
-    (code = $code:expr, message = $message:expr) => {
-        Exception {
-            code: Some($code.to_string()),
-            message: $message.to_string(),
-            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: None,
-        }
-    };
-    (message = $message:expr, source = $source:expr) => {
-        Exception {
-            code: None,
-            message: $message.to_string(),
-            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: Some(Box::new($source.into())),
-        }
-    };
-    (code = $code:expr, message = $message:expr, source = $source:expr) => {
-        Exception {
-            code: Some($code.to_string()),
-            message: $message.to_string(),
-            location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
-            source: Some(Box::new($source.into())),
-        }
-    };
+    }};
 }
 
 fn source(source: Option<&(dyn Error + 'static)>) -> Option<Box<Exception>> {
@@ -85,6 +81,7 @@ fn source(source: Option<&(dyn Error + 'static)>) -> Option<Box<Exception>> {
     let mut result = None;
     for error in sources.into_iter().rev() {
         result = Some(Box::new(Exception {
+            severity: Severity::Error,
             code: None,
             message: error.to_string(),
             location: None,
@@ -100,6 +97,7 @@ where
 {
     fn from(error: T) -> Self {
         Exception {
+            severity: Severity::Error,
             code: None,
             message: error.to_string(),
             location: None,

@@ -43,7 +43,7 @@ pub async fn main() -> Result<(), Exception> {
             test_bulk: Topic::new("test"),
         },
         producer: Producer::new(ProducerConfig {
-            bootstrap_servers: "dev.internal:9092",
+            bootstrap_servers: "dev.internal:9092".to_string(),
         }),
         tx,
     });

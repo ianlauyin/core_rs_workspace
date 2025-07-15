@@ -6,16 +6,10 @@ members = ["app/*", "lib/*"]
 framework = { path = "lib/framework" }
 
 tracing = "*"
-tracing-subscriber = "*"
-
 serde = { version = "*", features = ["derive"] }
-serde_json = "*"
 
 tokio = { version = "*", features = ["full"] }
-tokio-util = { version = "*", features = ["rt"] }
-tokio-stream = { version = "*" }
 axum = { version = "*", features = ["macros"] }
-axum-server = { version = "*", features = ["tls-rustls"] }
 reqwest = { version = "*", default-features = false, features = [
     "stream",
     "rustls-tls",
@@ -27,13 +21,9 @@ rdkafka = { version = "*", default-features = false, features = [
     "zstd",
 ] }
 
-futures = "*"
-bytes = "*"
-
 uuid = { version = "*", features = ["v7"] }
-indexmap = { version = "*", features = ["serde"] }
 chrono = { version = "*", features = ["serde"] }
-base64 = "*"
+
 
 # [profile.release]
 # debug = "line-tables-only"
