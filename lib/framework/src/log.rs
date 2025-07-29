@@ -20,7 +20,7 @@ use crate::exception::Exception;
 use crate::exception::Severity;
 
 mod appender;
-mod id_generator;
+pub mod id_generator;
 mod layer;
 
 pub trait ActionLogAppender {

@@ -1,3 +1,6 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use axum::Router;
 use axum::extract::MatchedPath;
 use axum::extract::Request;
@@ -13,12 +16,13 @@ use tracing::info;
 
 use crate::exception::Exception;
 use crate::log;
+use crate::web::client_info::client_info;
 
 pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::Receiver<()>) -> Result<(), Exception> {
     let app = Router::new();
     let app = app.merge(router);
-    let app = app.layer(middleware::from_fn(action_log_layer));
-
+    let app = app.layer(middleware::from_fn(http_server_layer));
+    let app = app.into_make_service_with_connect_info::<SocketAddr>();
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     info!("http server stated");
     axum::serve(listener, app)
@@ -31,7 +35,7 @@ pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::R
     Ok(())
 }
 
-async fn action_log_layer(request: Request, next: Next) -> Response {
+async fn http_server_layer(mut request: Request, next: Next) -> Response {
     // skip log for health check
     if request.uri().path() == "/health-check" {
         return StatusCode::NO_CONTENT.into_response();
@@ -48,11 +52,12 @@ async fn action_log_layer(request: Request, next: Next) -> Response {
         }
         debug!(uri = ?uri, method = ?method, "context");
 
-        if let Some(user_agent) = request.headers().get("user-agent") {
-            if let Ok(user_agent) = user_agent.to_str() {
-                debug!(user_agent, "context");
-            }
+        let client_info = client_info(&request, 2);
+        debug!(client_ip = client_info.client_ip, "context");
+        if let Some(ref user_agent) = client_info.user_agent {
+            debug!(user_agent, "context");
         }
+        request.extensions_mut().insert(Arc::new(client_info));
 
         let matched_path = request
             .extensions()
