@@ -21,5 +21,5 @@ jobs:
         with:
           context: .
           file: app/log_collector/Dockerfile
-          tags: "neowu/log_collector:rust"
+          tags: "neowu/log-collector:rust"
           push: true
