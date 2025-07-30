@@ -13,6 +13,7 @@ use framework::log::ConsoleAppender;
 use framework::schedule::Scheduler;
 use framework::shutdown::Shutdown;
 use framework::task;
+use framework::web::server::HttpServerConfig;
 use framework::web::server::start_http_server;
 use job::process_log_job;
 use kafka::action_log_handler::ActionLogMessage;
@@ -113,7 +114,7 @@ async fn main() -> Result<(), Exception> {
     let app = Router::new();
     let app = app.merge(web::routes());
     let app = app.with_state(state);
-    start_http_server(app, http_signal).await?;
+    start_http_server(app, http_signal, HttpServerConfig::default()).await?;
 
     task::shutdown().await;
 

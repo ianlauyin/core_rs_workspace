@@ -9,6 +9,7 @@ use framework::kafka::topic::Topic;
 use framework::log;
 use framework::log::ConsoleAppender;
 use framework::shutdown::Shutdown;
+use framework::web::server::HttpServerConfig;
 use framework::web::server::start_http_server;
 use kafka::EventMessage;
 use serde::Deserialize;
@@ -66,5 +67,5 @@ async fn main() -> Result<(), Exception> {
     let app = Router::new();
     let app = app.merge(web::routes());
     let app = app.with_state(state);
-    start_http_server(app, signal).await
+    start_http_server(app, signal, HttpServerConfig::default()).await
 }

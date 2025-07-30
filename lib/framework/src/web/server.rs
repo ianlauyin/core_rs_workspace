@@ -2,13 +2,18 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::body::Body;
 use axum::extract::MatchedPath;
 use axum::extract::Request;
+use axum::http;
 use axum::http::StatusCode;
+use axum::http::header;
 use axum::middleware;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::response::Response;
+use axum_extra::extract::CookieJar;
+use http_body_util::BodyExt;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tracing::debug;
@@ -18,12 +23,30 @@ use crate::exception::Exception;
 use crate::log;
 use crate::web::client_info::client_info;
 
-pub async fn start_http_server(router: Router, mut shutdown_signal: broadcast::Receiver<()>) -> Result<(), Exception> {
+pub struct HttpServerConfig {
+    pub bind_address: String,
+    pub max_forwarded_ips: usize,
+}
+
+impl Default for HttpServerConfig {
+    fn default() -> Self {
+        HttpServerConfig {
+            bind_address: "0.0.0.0:8080".to_string(),
+            max_forwarded_ips: 2,
+        }
+    }
+}
+
+pub async fn start_http_server(
+    router: Router,
+    mut shutdown_signal: broadcast::Receiver<()>,
+    config: HttpServerConfig,
+) -> Result<(), Exception> {
     let app = Router::new();
     let app = app.merge(router);
     let app = app.layer(middleware::from_fn(http_server_layer));
     let app = app.into_make_service_with_connect_info::<SocketAddr>();
-    let listener = TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = TcpListener::bind(config.bind_address).await?;
     info!("http server stated");
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
@@ -43,13 +66,20 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
 
     let mut response = None;
     log::start_action("http", None, async {
-        let method = request.method();
+        let method = request.method().clone();
         let uri = request.uri();
         debug!(method = ?method, "[request]");
         debug!(uri = ?uri, "[request]");
         for (name, value) in request.headers().iter() {
-            debug!("[header] {name}={value:?}");
+            if name != header::COOKIE {
+                debug!("[header] {name}={value:?}");
+            }
         }
+        let cookies = CookieJar::from_headers(request.headers());
+        for cookie in cookies.iter() {
+            debug!("[cookie] {}={}", cookie.name(), cookie.value());
+        }
+
         debug!(uri = ?uri, method = ?method, "context");
 
         let client_info = client_info(&request, 2);
@@ -66,6 +96,24 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
         if let Some(matched_path) = matched_path {
             debug!(matched_path = matched_path, "context");
         }
+
+        let headers = request.headers();
+        if (method == http::Method::POST || method == http::Method::PUT || method == http::Method::PATCH)
+            && let Some(length) = headers
+                .get(header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| str::parse::<usize>(v).ok())
+        {
+            debug!(request_content_length = length, "stats");
+
+            if length > 0
+                && let Some(content_type) = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok())
+                && (content_type.contains("json") || content_type.contains("text"))
+            {
+                request = log_body(request).await?;
+            }
+        }
+
         let http_response = next.run(request).await;
         let status = http_response.status().as_u16();
         debug!(status, "[response]");
@@ -82,4 +130,19 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
     } else {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
+}
+
+async fn log_body(request: Request) -> Result<Request, Exception> {
+    let (parts, body) = request.into_parts();
+
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|err| exception!(message = "failed to read body", source = err))?
+        .to_bytes();
+
+    let content = bytes.to_vec();
+    debug!("[request] body={}", String::from_utf8_lossy(&content));
+
+    Ok(Request::from_parts(parts, Body::from(bytes)))
 }

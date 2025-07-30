@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::result::Result;
 use std::sync::Arc;
 
 use axum::Extension;
@@ -7,7 +8,6 @@ use axum::debug_handler;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::HeaderMap;
-use axum::http::HeaderName;
 use axum::http::HeaderValue;
 use axum::http::header;
 use axum::routing::get;
@@ -31,15 +31,23 @@ use crate::kafka::EventMessage;
 
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/robots.txt", get(robots_txt))
         .route("/event/{app}", options(event_options))
         .route("/event/{app}", post(event_post))
-        .route("/test", get(test))
 }
 
 #[debug_handler]
-async fn test(Extension(client_info): Extension<Arc<ClientInfo>>) -> HttpResult<String> {
-    warn!("!!!!!! client_ip = {}", client_info.client_ip);
-    Ok("Test endpoint is working".to_string())
+async fn robots_txt() -> (HeaderMap, &'static str) {
+    let mut headers = HeaderMap::new();
+    headers.append(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=2592000"), // 30 days
+    );
+    (
+        headers,
+        "User-agent: *
+Disallow: /",
+    )
 }
 
 #[debug_handler]
@@ -76,15 +84,13 @@ async fn event_post(
     state: State<Arc<AppState>>,
     Path(app): Path<String>,
     headers: HeaderMap,
+    Extension(client_info): Extension<Arc<ClientInfo>>,
     body: String,
 ) -> HttpResult<HeaderMap> {
-    // let body = request.body();
     if !body.is_empty() {
         let request: SendEventRequest = json::from_json(&body)?;
-        process_events(&state, &app, request, &headers).await?;
+        process_events(&state, &app, request, client_info).await?;
     }
-
-    // state.producer.send(&state.topics.event, None, &event).await?;
 
     let origin = headers.get(header::ORIGIN);
     let mut response_headers = HeaderMap::new();
@@ -102,15 +108,14 @@ async fn process_events(
     state: &Arc<AppState>,
     app: &str,
     request: SendEventRequest,
-    headers: &HeaderMap,
+    client_info: Arc<ClientInfo>,
 ) -> HttpResult<()> {
-    let user_agent = headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok());
-    let client_ip = headers
-        .get(HeaderName::from_static("X-FORWARDED-FOR"))
-        .map(|value| value.to_str().unwrap())
-        .unwrap_or("hello");
-
     for event in request.events {
+        if let Err(error_message) = event.validate() {
+            warn!("skip invalid event, error={error_message}");
+            continue;
+        }
+
         let mut message = EventMessage {
             id: log::id_generator::random_id(),
             date: event.date,
@@ -126,10 +131,13 @@ async fn process_events(
             info: event.info,
         };
 
+        if let Some(ref user_agent) = client_info.user_agent {
+            message.context.insert("user_agent".to_string(), user_agent.to_string());
+        }
+
         message
             .context
-            .insert("user_agent".to_string(), user_agent.unwrap_or("").to_string());
-        message.context.insert("client_ip".to_string(), client_ip.to_string());
+            .insert("client_ip".to_string(), client_info.client_ip.to_string());
 
         state.producer.send(&state.topics.event, None, &message).await?;
     }
@@ -145,7 +153,7 @@ struct SendEventRequest {
 #[derive(Deserialize, Debug)]
 struct Event {
     date: DateTime<Utc>,
-    result: Result,
+    result: EventResult,
     action: String,
     #[serde(rename = "errorCode")]
     error_code: Option<String>,
@@ -159,7 +167,7 @@ struct Event {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Result {
+pub enum EventResult {
     #[serde(rename = "OK")]
     Ok,
     #[serde(rename = "WARN")]
@@ -168,98 +176,72 @@ pub enum Result {
     Error,
 }
 
-/*
- * public class SendEventRequest {
-     @NotNull
-     @Size(min = 1)
-     @Property(name = "events")
-     public List<Event> events = new ArrayList<>();
+impl Event {
+    const MAX_KEY_LENGTH: usize = 50;
+    const MAX_CONTEXT_VALUE_LENGTH: usize = 1000;
+    const MAX_INFO_VALUE_LENGTH: usize = 500_000;
+    const MAX_ESTIMATED_LENGTH: usize = 900_000; // by default kafka message limit is 1M, leave 100k for rest of message
 
-     public enum Result {
-         @Property(name = "OK")
-         OK,
-         @Property(name = "WARN")
-         WARN,
-         @Property(name = "ERROR")
-         ERROR
-     }
-
-     public static class Event {
-         @NotNull
-         @Property(name = "date")
-         public ZonedDateTime date;
-         @NotNull
-         @Property(name = "result")
-         public Result result;
-         @NotBlank
-         @Size(max = 200)
-         @Property(name = "action")
-         public String action;
-         @NotBlank
-         @Size(max = 200)
-         @Property(name = "errorCode")
-         public String errorCode;
-         @Size(max = 1000)
-         @Property(name = "errorMessage")
-         public String errorMessage;
-         @NotNull
-         @Property(name = "context")
-         public Map<String, String> context = new HashMap<>();
-         @NotNull
-         @Property(name = "stats")
-         public Map<String, Double> stats = new HashMap<>();
-         @NotNull
-         @Property(name = "info")
-         public Map<String, String> info = new HashMap<>();
-         @NotNull
-         @Property(name = "elapsedTime")
-         public Long elapsedTime;
-     }
- }
-
- * EventMessage message(SendEventRequest.Event event, String app, Instant now) {
-         var message = new EventMessage();
-         message.id = LogManager.ID_GENERATOR.next(now);
-         message.date = event.date.toInstant();
-         message.app = app;
-         message.receivedTime = now;
-         message.result = JSON.toEnumValue(event.result);
-         message.action = event.action;
-         message.errorCode = event.errorCode;
-         message.errorMessage = event.errorMessage;
-         message.context = event.context;
-         message.info = event.info;
-         message.stats = event.stats;
-         message.elapsed = event.elapsedTime;
-         return message;
-     }
-* public Response post(Request request) {
-        String origin = request.header("Origin").orElse(null);
-        if (origin != null) checkOrigin(origin);    // allow directly call, e.g. mobile app
-
-        processEvents(request, Instant.now());
-
-        Response response = Response.empty();
-        if (origin != null) {
-            // only need to response CORS headers for browser/ajax
-            response.header("Access-Control-Allow-Origin", origin);
-            response.header("Access-Control-Allow-Credentials", "true");
+    fn validate(&self) -> Result<(), String> {
+        // Validate action for OK result
+        if matches!(self.result, EventResult::Ok) && self.action.is_empty() {
+            return Err("action must not be empty if result is OK".to_string());
         }
-        return response;
+
+        if (matches!(self.result, EventResult::Warn) || matches!(self.result, EventResult::Error))
+            && self.error_code.as_ref().is_none_or(|s| s.is_empty())
+        {
+            return Err("errorCode must not be empty if result is WARN/ERROR".to_string());
+        }
+
+        // Validate maps and estimate size
+        let mut estimated_length = 0;
+        estimated_length += Event::validate_map(&self.context, Event::MAX_KEY_LENGTH, Event::MAX_CONTEXT_VALUE_LENGTH)?;
+        estimated_length += Event::validate_map(&self.info, Event::MAX_KEY_LENGTH, Event::MAX_INFO_VALUE_LENGTH)?;
+        estimated_length += Event::validate_stats(&self.stats, Event::MAX_KEY_LENGTH)?;
+
+        if estimated_length > Event::MAX_ESTIMATED_LENGTH {
+            return Err(format!("event is too large, estimatedLength={estimated_length}"));
+        }
+
+        Ok(())
     }
 
-    private void processEvents(Request request, Instant now) {
-        SendEventRequest eventRequest = sendEventRequest(request);
-        if (eventRequest == null) return;
+    fn validate_map(
+        map: &HashMap<String, String>,
+        max_key_length: usize,
+        max_value_length: usize,
+    ) -> Result<usize, String> {
+        let mut estimated_length = 0;
+        for (key, value) in map {
+            if key.len() > max_key_length {
+                let truncated = Event::truncate(key, 50);
+                return Err(format!("key is too long, key={truncated}...(truncated)"));
+            }
+            estimated_length += key.len();
 
-        String app = request.pathParam("app");
-        String userAgent = request.header(HTTPHeaders.USER_AGENT).orElse(null);
-        String clientIP = request.clientIP();
-        List<Cookie> cookies = cookies(request);
-        for (SendEventRequest.Event event : eventRequest.events) {
-            EventMessage message = message(event, app, now);
-            addContext(message.context, userAgent, cookies, clientIP);
-            eventMessagePublisher.publish(message.id, message);
+            if value.len() > max_value_length {
+                let truncated = Event::truncate(value, 200);
+                return Err(format!("value is too long, key={key}, value={truncated}...(truncated)"));
+            }
+            estimated_length += value.len();
         }
+        Ok(estimated_length)
     }
-*/
+
+    fn validate_stats(stats: &HashMap<String, f64>, max_key_length: usize) -> Result<usize, String> {
+        let mut estimated_length = 0;
+        for key in stats.keys() {
+            if key.len() > max_key_length {
+                let truncated = Event::truncate(key, 50);
+                return Err(format!("key is too long, key={truncated}...(truncated)"));
+            }
+            estimated_length += key.len() + 5; // estimate double value as 5 chars
+        }
+        Ok(estimated_length)
+    }
+
+    fn truncate(s: &str, max_len: usize) -> &str {
+        if s.len() <= max_len { s } else { &s[..max_len] }
+    }
+}
