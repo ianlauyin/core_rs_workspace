@@ -17,3 +17,9 @@ jobs:
           file: app/log_exporter/Dockerfile
           tags: "neowu/log-exporter:rust"
           push: true
+      - uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: app/log_collector/Dockerfile
+          tags: "neowu/log_collector:rust"
+          push: true
