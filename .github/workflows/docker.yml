@@ -13,6 +13,7 @@ jobs:
         with:
           username: neowu
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      - run: echo "TAG=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - uses: docker/build-push-action@v4
         with:
           context: .
