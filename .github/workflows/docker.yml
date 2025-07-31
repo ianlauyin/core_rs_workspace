@@ -11,15 +11,15 @@ jobs:
         with:
           username: neowu
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
-      - uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: app/log_exporter/Dockerfile
-          tags: "neowu/log-exporter:rust"
-          push: true
+      # - uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     file: app/log_exporter/Dockerfile
+      #     tags: "neowu/log-exporter:rust"
+      #     push: true
       - uses: docker/build-push-action@v4
         with:
           context: .
           file: app/log_collector/Dockerfile
-          tags: "neowu/log-collector:rust"
+          tags: "neowu/log-collector:rust-test-01"
           push: true
