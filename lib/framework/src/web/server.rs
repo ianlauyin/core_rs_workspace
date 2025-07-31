@@ -61,7 +61,7 @@ pub async fn start_http_server(
 async fn http_server_layer(mut request: Request, next: Next) -> Response {
     // skip log for health check
     if request.uri().path() == "/health-check" {
-        return StatusCode::NO_CONTENT.into_response();
+        return StatusCode::OK.into_response(); // gce lb health check requires to return 200
     }
 
     let mut response = None;

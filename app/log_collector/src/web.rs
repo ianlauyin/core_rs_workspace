@@ -34,13 +34,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/robots.txt", get(robots_txt))
         .route("/event/{app}", options(event_options))
         .route("/event/{app}", post(event_post))
-        .route("/{*key}", get(all))
-}
-
-#[debug_handler]
-async fn all() -> &'static str {
-    warn!("test ok");
-    "ok"
 }
 
 #[debug_handler]

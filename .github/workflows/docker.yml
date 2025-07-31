@@ -1,5 +1,7 @@
 name: Docker
-on: workflow_dispatch
+on:
+  push:
+    tags: ["*.*.*"]
 env:
   CARGO_TERM_COLOR: always
 jobs:
@@ -11,15 +13,15 @@ jobs:
         with:
           username: neowu
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
-      # - uses: docker/build-push-action@v4
-      #   with:
-      #     context: .
-      #     file: app/log_exporter/Dockerfile
-      #     tags: "neowu/log-exporter:rust"
-      #     push: true
+      - uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: app/log_exporter/Dockerfile
+          tags: "neowu/log-exporter:${{ env.TAG }}-rust"
+          push: true
       - uses: docker/build-push-action@v4
         with:
           context: .
           file: app/log_collector/Dockerfile
-          tags: "neowu/log-collector:rust-test-01"
+          tags: "neowu/log-collector:${{ env.TAG }}-rust"
           push: true
