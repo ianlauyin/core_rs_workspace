@@ -78,7 +78,7 @@ impl HttpResponse {
 
     pub async fn text(self) -> Result<String, Exception> {
         let body = self.response.text().await?;
-        debug!(body, "[response]");
+        debug!("[response] body={body}");
         Ok(body)
     }
 }
@@ -96,7 +96,7 @@ impl HttpClient {
                 http_request.headers_mut().insert(key, value.parse()?);
             }
             if let Some(body) = request.body {
-                debug!(body, "[request]");
+                debug!("[request] body={body}");
                 *http_request.body_mut() = Some(Body::from(body));
             }
 

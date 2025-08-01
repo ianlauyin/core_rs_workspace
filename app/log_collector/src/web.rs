@@ -110,6 +110,7 @@ async fn process_events(
     request: SendEventRequest,
     client_info: Arc<ClientInfo>,
 ) -> HttpResult<()> {
+    let now = Utc::now();
     for event in request.events {
         if let Err(error_message) = event.validate() {
             warn!("skip invalid event, error={error_message}");
@@ -120,7 +121,7 @@ async fn process_events(
             id: log::id_generator::random_id(),
             date: event.date,
             app: app.to_string(),
-            received_time: Utc::now(),
+            received_time: now,
             result: json::to_json_value(&event.result),
             action: event.action,
             error_code: event.error_code,

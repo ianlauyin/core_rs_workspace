@@ -5,7 +5,8 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::MatchedPath;
 use axum::extract::Request;
-use axum::http;
+use axum::http::HeaderMap;
+use axum::http::Method;
 use axum::http::StatusCode;
 use axum::http::header;
 use axum::middleware;
@@ -46,8 +47,8 @@ pub async fn start_http_server(
     let app = app.merge(router);
     let app = app.layer(middleware::from_fn(http_server_layer));
     let app = app.into_make_service_with_connect_info::<SocketAddr>();
-    let listener = TcpListener::bind(config.bind_address).await?;
-    info!("http server stated");
+    let listener = TcpListener::bind(&config.bind_address).await?;
+    info!("http server stated, bind={}", config.bind_address);
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown_signal.recv().await.unwrap();
@@ -97,22 +98,7 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
             debug!(matched_path = matched_path, "context");
         }
 
-        let headers = request.headers();
-        if (method == http::Method::POST || method == http::Method::PUT || method == http::Method::PATCH)
-            && let Some(length) = headers
-                .get(header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| str::parse::<usize>(v).ok())
-        {
-            debug!(request_content_length = length, "stats");
-
-            if length > 0
-                && let Some(content_type) = headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok())
-                && (content_type.contains("json") || content_type.contains("text"))
-            {
-                request = log_body(request).await?;
-            }
-        }
+        request = log_request_body(request).await?;
 
         let http_response = next.run(request).await;
         let status = http_response.status().as_u16();
@@ -121,7 +107,7 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
         for (name, value) in http_response.headers().iter() {
             debug!("[header] {name}={value:?}");
         }
-        response = Some(http_response);
+        response = Some(log_response_body(http_response).await?);
         Ok(())
     })
     .await;
@@ -132,17 +118,64 @@ async fn http_server_layer(mut request: Request, next: Next) -> Response {
     }
 }
 
-async fn log_body(request: Request) -> Result<Request, Exception> {
-    let (parts, body) = request.into_parts();
+async fn log_request_body(request: Request) -> Result<Request, Exception> {
+    let method = request.method();
+    let headers = request.headers();
+    if (method == Method::POST || method == Method::PUT || method == Method::PATCH)
+        && let Some(length) = content_length(headers)
+    {
+        debug!(request_content_length = length, "stats");
 
-    let bytes = body
-        .collect()
-        .await
-        .map_err(|err| exception!(message = "failed to read body", source = err))?
-        .to_bytes();
+        if length > 0
+            && let Some(content_type) = content_type(headers)
+            && (content_type.contains("json") || content_type.contains("text"))
+        {
+            let (parts, body) = request.into_parts();
 
-    let content = bytes.to_vec();
-    debug!("[request] body={}", String::from_utf8_lossy(&content));
+            let bytes = body
+                .collect()
+                .await
+                .map_err(|err| exception!(message = "failed to read body", source = err))?
+                .to_bytes();
+            debug!("[request] body={}", String::from_utf8_lossy(&bytes));
 
-    Ok(Request::from_parts(parts, Body::from(bytes)))
+            return Ok(Request::from_parts(parts, Body::from(bytes)));
+        }
+    }
+    Ok(request)
+}
+
+async fn log_response_body(response: Response) -> Result<Response, Exception> {
+    let headers = response.headers();
+    if let Some(length) = content_length(headers) {
+        debug!(response_content_length = length, "stats");
+
+        if length > 0
+            && let Some(content_type) = content_type(headers)
+            && (content_type.contains("json") || content_type.contains("text"))
+        {
+            let (parts, body) = response.into_parts();
+
+            let bytes = body
+                .collect()
+                .await
+                .map_err(|err| exception!(message = "failed to read body", source = err))?
+                .to_bytes();
+            debug!("[response] body={}", String::from_utf8_lossy(&bytes));
+
+            return Ok(Response::from_parts(parts, Body::from(bytes)));
+        }
+    }
+    Ok(response)
+}
+
+fn content_length(headers: &HeaderMap) -> Option<usize> {
+    headers
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| str::parse::<usize>(v).ok())
+}
+
+fn content_type(headers: &HeaderMap) -> Option<&str> {
+    headers.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok())
 }
