@@ -43,10 +43,10 @@ impl ActionLogAppender for ConsoleAppender {
 
         println!("{log}");
 
-        if action_log.result != ActionResult::Ok {
-            if let Some(trace) = action_log.trace {
-                eprintln!("{trace}");
-            }
+        if action_log.result != ActionResult::Ok
+            && let Some(trace) = action_log.trace
+        {
+            eprintln!("{trace}");
         }
     }
 }

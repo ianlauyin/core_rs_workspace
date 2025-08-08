@@ -207,7 +207,7 @@ fn poll_message_groups(
     consumer: &BaseConsumer,
     max_wait_time: Duration,
     max_records: usize,
-) -> Result<HashMap<String, Vec<BorrowedMessage>>, KafkaError> {
+) -> Result<HashMap<String, Vec<BorrowedMessage<'_>>>, KafkaError> {
     let mut messages: HashMap<String, Vec<BorrowedMessage>> = HashMap::new();
     let start_time = Instant::now();
     let mut count = 1;

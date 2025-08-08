@@ -58,38 +58,38 @@ where
         if span.name() == "action" {
             let mut action_visitor = ActionVisitor::new();
             attrs.record(&mut action_visitor);
-            if let Some(mut action_log) = action_visitor.action_log() {
-                if extensions.get_mut::<ActionLog>().is_none() {
-                    action_log.logs.push(format!(
-                        r#"=== action begin ===
+            if let Some(mut action_log) = action_visitor.action_log()
+                && extensions.get_mut::<ActionLog>().is_none()
+            {
+                action_log.logs.push(format!(
+                    r#"=== action begin ===
 type={}
 id={}
 date={}
 thread={:?}"#,
-                        action_log.action,
-                        action_log.id,
-                        action_log.date.to_rfc3339_opts(SecondsFormat::Nanos, true),
-                        thread::current().id()
-                    ));
+                    action_log.action,
+                    action_log.id,
+                    action_log.date.to_rfc3339_opts(SecondsFormat::Nanos, true),
+                    thread::current().id()
+                ));
 
-                    if let Some(ref ref_id) = action_log.ref_id {
-                        action_log.logs.push(format!("ref_id={ref_id}"));
-                    }
-
-                    extensions.insert(action_log);
+                if let Some(ref ref_id) = action_log.ref_id {
+                    action_log.logs.push(format!("ref_id={ref_id}"));
                 }
-            }
-        } else if let Some(action_span) = action_span(context.span_scope(id)) {
-            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
-                extensions.insert(SpanExtension {
-                    start_time: Instant::now(),
-                });
 
-                let mut log_string = format!("[span:{}] ", span.name());
-                attrs.record(&mut LogVisitor(&mut log_string));
-                log_string.push_str(">>>");
-                action_log.logs.push(log_string);
+                extensions.insert(action_log);
             }
+        } else if let Some(action_span) = action_span(context.span_scope(id))
+            && let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>()
+        {
+            extensions.insert(SpanExtension {
+                start_time: Instant::now(),
+            });
+
+            let mut log_string = format!("[span:{}] ", span.name());
+            attrs.record(&mut LogVisitor(&mut log_string));
+            log_string.push_str(">>>");
+            action_log.logs.push(log_string);
         }
     }
 
@@ -98,32 +98,31 @@ thread={:?}"#,
         if let Some(action_log) = span.extensions_mut().remove::<ActionLog>() {
             let action_log_message = close_action(action_log);
             self.appender.append(action_log_message);
-        } else if let Some(action_span) = action_span(context.span_scope(&id)) {
-            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
-                if let Some(span_extension) = span.extensions_mut().remove::<SpanExtension>() {
-                    let elapsed = span_extension.start_time.elapsed();
-                    action_log
-                        .logs
-                        .push(format!("[span:{}] elapsed={:?} <<<", span.name(), elapsed));
+        } else if let Some(action_span) = action_span(context.span_scope(&id))
+            && let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>()
+            && let Some(span_extension) = span.extensions_mut().remove::<SpanExtension>()
+        {
+            let elapsed = span_extension.start_time.elapsed();
+            action_log
+                .logs
+                .push(format!("[span:{}] elapsed={:?} <<<", span.name(), elapsed));
 
-                    let value = action_log.stats.entry(format!("{}_elapsed", span.name())).or_default();
-                    *value += elapsed.as_nanos();
+            let value = action_log.stats.entry(format!("{}_elapsed", span.name())).or_default();
+            *value += elapsed.as_nanos();
 
-                    let value = action_log.stats.entry(format!("{}_count", span.name())).or_default();
-                    *value += 1;
-                }
-            }
+            let value = action_log.stats.entry(format!("{}_count", span.name())).or_default();
+            *value += 1;
         }
     }
 
     fn on_record(&self, id: &Id, values: &Record, context: Context<S>) {
-        if let Some(action_span) = action_span(context.span_scope(id)) {
-            if let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>() {
-                let span = context.span(id).unwrap();
-                let mut log_string = format!("[span:{}] ", span.name());
-                values.record(&mut LogVisitor(&mut log_string));
-                action_log.logs.push(log_string);
-            }
+        if let Some(action_span) = action_span(context.span_scope(id))
+            && let Some(action_log) = action_span.extensions_mut().get_mut::<ActionLog>()
+        {
+            let span = context.span(id).unwrap();
+            let mut log_string = format!("[span:{}] ", span.name());
+            values.record(&mut LogVisitor(&mut log_string));
+            action_log.logs.push(log_string);
         }
     }
 
@@ -132,59 +131,59 @@ thread={:?}"#,
             return;
         }
 
-        if let Some(span) = action_span(context.event_scope(event)) {
-            if let Some(action_log) = span.extensions_mut().get_mut::<ActionLog>() {
-                let elapsed = action_log.start_time.elapsed();
-                let total_seconds = elapsed.as_secs();
-                let minutes = total_seconds / 60;
-                let seconds = total_seconds % 60;
-                let nanos = elapsed.subsec_nanos();
+        if let Some(span) = action_span(context.event_scope(event))
+            && let Some(action_log) = span.extensions_mut().get_mut::<ActionLog>()
+        {
+            let elapsed = action_log.start_time.elapsed();
+            let total_seconds = elapsed.as_secs();
+            let minutes = total_seconds / 60;
+            let seconds = total_seconds % 60;
+            let nanos = elapsed.subsec_nanos();
 
-                let mut log = String::new();
-                write!(log, "{minutes:02}:{seconds:02}.{nanos:09} ").unwrap();
+            let mut log = String::new();
+            write!(log, "{minutes:02}:{seconds:02}.{nanos:09} ").unwrap();
 
-                let metadata = event.metadata();
-                let level = metadata.level();
-                if level <= &Level::INFO {
-                    write!(log, "{level} ").unwrap();
-                }
+            let metadata = event.metadata();
+            let level = metadata.level();
+            if level <= &Level::INFO {
+                write!(log, "{level} ").unwrap();
+            }
 
-                write!(log, "{}:{} ", metadata.target(), metadata.line().unwrap_or(0)).unwrap();
+            write!(log, "{}:{} ", metadata.target(), metadata.line().unwrap_or(0)).unwrap();
 
-                if level == &Level::ERROR || level == &Level::WARN {
-                    let mut visitor = ErrorVisitor {
-                        message: None,
-                        code: None,
-                    };
-                    event.record(&mut visitor);
-                    if let Some(ref error_code) = visitor.code {
-                        write!(log, "[{error_code}] ").unwrap();
-                    }
-
-                    let result = if level == &Level::ERROR {
-                        ActionResult::Error
-                    } else {
-                        ActionResult::Warn
-                    };
-
-                    if action_log.result.level() < result.level() {
-                        action_log.result = result;
-                        action_log.error_code = visitor.code;
-                        action_log.error_message = visitor.message;
-                    }
-                }
-
-                let mut visitor = LogVisitor(&mut log);
-                event.record(&mut visitor);
-                action_log.logs.push(log);
-
-                // hanldle "context" and "stats" event
-                let mut visitor = ContextVisitor {
-                    action_log,
-                    context_type: None,
+            if level == &Level::ERROR || level == &Level::WARN {
+                let mut visitor = ErrorVisitor {
+                    message: None,
+                    code: None,
                 };
                 event.record(&mut visitor);
+                if let Some(ref error_code) = visitor.code {
+                    write!(log, "[{error_code}] ").unwrap();
+                }
+
+                let result = if level == &Level::ERROR {
+                    ActionResult::Error
+                } else {
+                    ActionResult::Warn
+                };
+
+                if action_log.result.level() < result.level() {
+                    action_log.result = result;
+                    action_log.error_code = visitor.code;
+                    action_log.error_message = visitor.message;
+                }
             }
+
+            let mut visitor = LogVisitor(&mut log);
+            event.record(&mut visitor);
+            action_log.logs.push(log);
+
+            // hanldle "context" and "stats" event
+            let mut visitor = ContextVisitor {
+                action_log,
+                context_type: None,
+            };
+            event.record(&mut visitor);
         }
     }
 }

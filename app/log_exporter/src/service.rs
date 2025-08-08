@@ -15,10 +15,10 @@ pub fn local_file_path(name: &str, date: NaiveDate, state: &Arc<AppState>) -> Re
     let year = date.year();
     let hash = &state.hash;
     let path = PathBuf::from(format!("{dir}/{name}/{year}/{name}-{date}-{hash}.ndjson"));
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)?;
     }
     Ok(path)
 }
