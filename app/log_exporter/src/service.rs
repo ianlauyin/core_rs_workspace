@@ -24,7 +24,7 @@ pub fn local_file_path(name: &str, date: NaiveDate, state: &Arc<AppState>) -> Re
 }
 
 pub fn cleanup_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<(), Exception> {
-    info!("cleaning up archives, date={date}");
+    info!("clean up archives, date={date}");
 
     let action_log_path = local_file_path("action", date, state)?;
     if action_log_path.exists() {
@@ -40,8 +40,6 @@ pub fn cleanup_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<(), Exc
 }
 
 pub async fn upload_archive(date: NaiveDate, state: &Arc<AppState>) -> Result<(), Exception> {
-    info!("uploading archives, date={date}");
-
     let action_log_path = local_file_path("action", date, state)?;
     if action_log_path.exists() {
         let remote_path = remote_path("action", date, state);
@@ -65,12 +63,15 @@ async fn convert_parquet_and_upload(
     columns: &str,
 ) -> Result<(), Exception> {
     let local_path = local_path_buf.to_string_lossy();
+    info!("convert to parquet, path={local_path}");
     let parquet_path_buf = local_path_buf.with_extension("parquet");
     let parquet_path = parquet_path_buf.to_string_lossy();
     let command = format!(
         r#"SET memory_limit='256MB';SET temp_directory='/tmp/duckdb';COPY (SELECT * FROM read_ndjson(['{local_path}'], columns = {columns})) TO '{parquet_path}' (FORMAT 'parquet');"#
     );
     shell::run(&format!("duckdb -c \"{command}\"")).await?;
+
+    info!("upload archive, path={parquet_path}");
     let command = format!("gcloud storage cp --quiet {parquet_path} {remote_path}");
     shell::run(&command).await?;
     fs::remove_file(parquet_path_buf)?;

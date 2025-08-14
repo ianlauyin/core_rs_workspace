@@ -36,6 +36,7 @@ pub fn init() {
         .with(
             tracing_subscriber::fmt::layer()
                 .compact()
+                .with_ansi(false) // generally cloud log console doesn't support color
                 .with_line_number(true)
                 .with_thread_ids(true)
                 .with_filter(LevelFilter::INFO),
@@ -53,6 +54,7 @@ where
         .with(
             tracing_subscriber::fmt::layer()
                 .compact()
+                .with_ansi(false) // generally cloud log console doesn't support color
                 .with_line_number(true)
                 .with_thread_ids(true)
                 .with_filter(LevelFilter::INFO),
