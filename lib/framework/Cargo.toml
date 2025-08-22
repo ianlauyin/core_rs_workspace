@@ -16,7 +16,6 @@ tokio-util = { version = "*", features = ["rt"] }
 axum.workspace = true
 axum-extra.workspace = true
 axum-server = { version = "*", features = ["tls-rustls"] }
-http-body-util = "*"
 
 reqwest.workspace = true
 

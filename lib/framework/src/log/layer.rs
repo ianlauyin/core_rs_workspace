@@ -330,6 +330,8 @@ impl Visit for ContextVisitor<'_> {
         if let Some(ContextType::Stats) = self.context_type {
             let stats_value = self.action_log.stats.entry(field.name().to_owned()).or_default();
             *stats_value += value;
+        } else if let Some(ContextType::Context) = self.context_type {
+            self.action_log.context.insert(field.name(), format!("{value}"));
         }
     }
 

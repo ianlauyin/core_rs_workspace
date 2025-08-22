@@ -2,6 +2,11 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 
+use serde::Deserialize;
+use serde::Serialize;
+
+pub const ERROR_CODE_VALIDATION_ERROR: &str = "VALIDATION_ERROR";
+
 pub struct Exception {
     pub severity: Severity,
     pub code: Option<String>,
@@ -10,9 +15,21 @@ pub struct Exception {
     pub source: Option<Box<Exception>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Severity {
+    #[serde(rename = "WARN")]
     Warn,
+    #[serde(rename = "ERROR")]
     Error,
+}
+
+impl Display for Severity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Severity::Warn => write!(f, "WARN"),
+            Severity::Error => write!(f, "ERROR"),
+        }
+    }
 }
 
 impl Debug for Exception {
@@ -29,7 +46,7 @@ impl Display for Exception {
             if index > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{index}: ")?;
+            write!(f, "{index}: {} ", source.severity)?;
             if let Some(ref code) = source.code {
                 write!(f, "[{code}] ")?;
             }
@@ -47,17 +64,19 @@ impl Display for Exception {
 #[macro_export]
 macro_rules! exception {
     ($(severity = $severity:expr,)? $(code = $code:expr,)? message = $message:expr $(,source = $source:expr)?) => {{
+        #[allow(unused_variables)]
         let severity = $crate::exception::Severity::Error;
         $(
             let severity = $severity;
         )?
+        #[allow(unused_variables)]
         let code: Option<String> = None;
         $(
             let code = Some($code.to_string());
         )?
+        #[allow(unused_variables)]
         let source: Option<Box<$crate::exception::Exception>> = None;
         $(
-            drop(source);
             let source = Some(Box::new($source.into()));
         )?
         $crate::exception::Exception {
@@ -67,6 +86,18 @@ macro_rules! exception {
             location: Some(format!("{}:{}:{}", file!(), line!(), column!())),
             source,
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! validation_error {
+    ($(severity = $severity:expr,)? message = $message:expr) => {{
+        #[allow(unused_variables)]
+        let severity = $crate::exception::Severity::Warn;
+        $(
+            let severity = $severity;
+        )?
+        $crate::exception!(severity = severity, code = $crate::exception::ERROR_CODE_VALIDATION_ERROR, message = $message)
     }};
 }
 

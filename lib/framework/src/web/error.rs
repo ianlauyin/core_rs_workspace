@@ -3,54 +3,36 @@ use std::fmt::Display;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
+use serde::Deserialize;
+use serde::Serialize;
 
+use crate::exception;
 use crate::exception::Exception;
+use crate::exception::Severity;
 use crate::log;
+use crate::web::body::Json;
 
 pub type HttpResult<T> = Result<T, HttpError>;
+
+pub const ERROR_CODE_BAD_REQUEST: &str = "BAD_REQUEST";
+pub const ERROR_CODE_NOT_FOUND: &str = "NOT_FOUND";
 
 #[derive(Debug)]
 pub struct HttpError {
     status_code: StatusCode,
-    exception: Exception,
+    body: HttpErrorBody,
 }
 
-impl HttpError {
-    pub fn internal_error<E>(error: E) -> Self
-    where
-        E: Into<Exception>,
-    {
-        Self {
-            status_code: StatusCode::INTERNAL_SERVER_ERROR,
-            exception: error.into(),
-        }
-    }
-
-    pub fn not_found<E>(error: E) -> Self
-    where
-        E: Into<Exception>,
-    {
-        Self {
-            status_code: StatusCode::NOT_FOUND,
-            exception: error.into(),
-        }
-    }
-
-    pub fn forbidden<E>(error: E) -> Self
-    where
-        E: Into<Exception>,
-    {
-        Self {
-            status_code: StatusCode::FORBIDDEN,
-            exception: error.into(),
-        }
-    }
+#[derive(Debug, Serialize, Deserialize)]
+struct HttpErrorBody {
+    severity: Severity,
+    code: Option<String>,
+    message: String,
 }
 
 impl IntoResponse for HttpError {
     fn into_response(self) -> Response {
-        log::log_exception(&self.exception);
-        (self.status_code, self.exception.message).into_response()
+        (self.status_code, Json(self.body)).into_response()
     }
 }
 
@@ -59,7 +41,28 @@ where
     E: Into<Exception>,
 {
     fn from(err: E) -> Self {
-        Self::internal_error(err)
+        let exception: Exception = err.into();
+        log::log_exception(&exception);
+
+        let status_code = exception
+            .code
+            .as_deref()
+            .map(|code| match code {
+                ERROR_CODE_BAD_REQUEST => StatusCode::BAD_REQUEST,
+                exception::ERROR_CODE_VALIDATION_ERROR => StatusCode::BAD_REQUEST,
+                ERROR_CODE_NOT_FOUND => StatusCode::NOT_FOUND,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            })
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        Self {
+            status_code,
+            body: HttpErrorBody {
+                severity: exception.severity,
+                code: exception.code,
+                message: exception.message,
+            },
+        }
     }
 }
 
