@@ -5,7 +5,7 @@ use std::fmt::Display;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const ERROR_CODE_VALIDATION_ERROR: &str = "VALIDATION_ERROR";
+pub mod error_code;
 
 pub struct Exception {
     pub severity: Severity,
@@ -97,7 +97,7 @@ macro_rules! validation_error {
         $(
             let severity = $severity;
         )?
-        $crate::exception!(severity = severity, code = $crate::exception::ERROR_CODE_VALIDATION_ERROR, message = $message)
+        $crate::exception!(severity = severity, code = $crate::exception::error_code::VALIDATION_ERROR, message = $message)
     }};
 }
 

@@ -1,21 +1,16 @@
-use std::fmt::Display;
-
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::exception;
 use crate::exception::Exception;
 use crate::exception::Severity;
+use crate::exception::error_code;
 use crate::log;
 use crate::web::body::Json;
 
 pub type HttpResult<T> = Result<T, HttpError>;
-
-pub const ERROR_CODE_BAD_REQUEST: &str = "BAD_REQUEST";
-pub const ERROR_CODE_NOT_FOUND: &str = "NOT_FOUND";
 
 #[derive(Debug)]
 pub struct HttpError {
@@ -48,9 +43,10 @@ where
             .code
             .as_deref()
             .map(|code| match code {
-                ERROR_CODE_BAD_REQUEST => StatusCode::BAD_REQUEST,
-                exception::ERROR_CODE_VALIDATION_ERROR => StatusCode::BAD_REQUEST,
-                ERROR_CODE_NOT_FOUND => StatusCode::NOT_FOUND,
+                error_code::BAD_REQUEST => StatusCode::BAD_REQUEST,
+                error_code::VALIDATION_ERROR => StatusCode::BAD_REQUEST,
+                error_code::NOT_FOUND => StatusCode::NOT_FOUND,
+                error_code::FORDIDDEN => StatusCode::FORBIDDEN,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             })
             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -63,11 +59,5 @@ where
                 message: exception.message,
             },
         }
-    }
-}
-
-impl Display for HttpError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{self:?}"))
     }
 }

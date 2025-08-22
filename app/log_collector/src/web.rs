@@ -16,11 +16,13 @@ use axum::routing::post;
 use chrono::DateTime;
 use chrono::Utc;
 use framework::exception;
+use framework::exception::Exception;
 use framework::exception::Severity;
+use framework::exception::error_code;
 use framework::json;
 use framework::log;
+use framework::validation_error;
 use framework::web::client_info::ClientInfo;
-use framework::web::error::HttpError;
 use framework::web::error::HttpResult;
 use serde::Deserialize;
 use serde::Serialize;
@@ -55,11 +57,11 @@ async fn event_options(headers: HeaderMap) -> HttpResult<HeaderMap> {
     let mut response_headers = HeaderMap::new();
 
     let origin = headers.get(header::ORIGIN).ok_or_else(|| {
-        HttpError::forbidden(exception!(
+        exception!(
             severity = Severity::Warn,
-            code = "FORDIDDEN",
+            code = error_code::FORDIDDEN,
             message = "access denied"
-        ))
+        )
     })?;
     response_headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone());
 
@@ -112,8 +114,8 @@ async fn process_events(
 ) -> HttpResult<()> {
     let now = Utc::now();
     for event in request.events {
-        if let Err(error_message) = event.validate() {
-            warn!("skip invalid event, error={error_message}");
+        if let Err(error) = event.validate() {
+            warn!("skip invalid event, error={error:?}");
             continue;
         }
 
@@ -183,16 +185,20 @@ impl Event {
     const MAX_INFO_VALUE_LENGTH: usize = 500_000;
     const MAX_ESTIMATED_LENGTH: usize = 900_000; // by default kafka message limit is 1M, leave 100k for rest of message
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), Exception> {
         // Validate action for OK result
         if matches!(self.result, EventResult::Ok) && self.action.is_empty() {
-            return Err("action must not be empty if result is OK".to_string());
+            return Err(validation_error!(
+                message = "action must not be empty if result is OK".to_string()
+            ));
         }
 
         if (matches!(self.result, EventResult::Warn) || matches!(self.result, EventResult::Error))
             && self.error_code.as_ref().is_none_or(|s| s.is_empty())
         {
-            return Err("errorCode must not be empty if result is WARN/ERROR".to_string());
+            return Err(validation_error!(
+                message = "errorCode must not be empty if result is WARN/ERROR".to_string()
+            ));
         }
 
         // Validate maps and estimate size
@@ -202,7 +208,9 @@ impl Event {
         estimated_length += Event::validate_stats(&self.stats, Event::MAX_KEY_LENGTH)?;
 
         if estimated_length > Event::MAX_ESTIMATED_LENGTH {
-            return Err(format!("event is too large, estimatedLength={estimated_length}"));
+            return Err(validation_error!(
+                message = format!("event is too large, estimatedLength={estimated_length}")
+            ));
         }
 
         Ok(())
@@ -212,30 +220,36 @@ impl Event {
         map: &HashMap<String, String>,
         max_key_length: usize,
         max_value_length: usize,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, Exception> {
         let mut estimated_length = 0;
         for (key, value) in map {
             if key.len() > max_key_length {
                 let truncated = Event::truncate(key, 50);
-                return Err(format!("key is too long, key={truncated}...(truncated)"));
+                return Err(validation_error!(
+                    message = format!("key is too long, key={truncated}...(truncated)")
+                ));
             }
             estimated_length += key.len();
 
             if value.len() > max_value_length {
                 let truncated = Event::truncate(value, 200);
-                return Err(format!("value is too long, key={key}, value={truncated}...(truncated)"));
+                return Err(validation_error!(
+                    message = format!("value is too long, key={key}, value={truncated}...(truncated)")
+                ));
             }
             estimated_length += value.len();
         }
         Ok(estimated_length)
     }
 
-    fn validate_stats(stats: &HashMap<String, f64>, max_key_length: usize) -> Result<usize, String> {
+    fn validate_stats(stats: &HashMap<String, f64>, max_key_length: usize) -> Result<usize, Exception> {
         let mut estimated_length = 0;
         for key in stats.keys() {
             if key.len() > max_key_length {
                 let truncated = Event::truncate(key, 50);
-                return Err(format!("key is too long, key={truncated}...(truncated)"));
+                return Err(validation_error!(
+                    message = format!("key is too long, key={truncated}...(truncated)")
+                ));
             }
             estimated_length += key.len() + 5; // estimate double value as 5 chars
         }

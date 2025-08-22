@@ -12,8 +12,8 @@ use tracing::debug;
 
 use crate::exception::Exception;
 use crate::exception::Severity;
+use crate::exception::error_code;
 use crate::json;
-use crate::web::error::ERROR_CODE_BAD_REQUEST;
 use crate::web::error::HttpError;
 
 pub struct Json<T>(pub T);
@@ -35,7 +35,7 @@ where
                     Ok(value) => Ok(Self(value)),
                     Err(exception) => Err(exception!(
                         severity = Severity::Warn,
-                        code = ERROR_CODE_BAD_REQUEST,
+                        code = error_code::BAD_REQUEST,
                         message = "failed to parse json body",
                         source = exception
                     )
@@ -46,7 +46,7 @@ where
                 let error_message = rejection.body_text();
                 Err(exception!(
                     severity = Severity::Warn,
-                    code = ERROR_CODE_BAD_REQUEST,
+                    code = error_code::BAD_REQUEST,
                     message = format!("failed to read body, error={error_message}")
                 )
                 .into())

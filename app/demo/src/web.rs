@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::Router;
 use axum::debug_handler;
 use axum::routing::post;
@@ -9,10 +7,11 @@ use framework::web::body::Json;
 use framework::web::error::HttpResult;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::warn;
 
 use crate::AppState;
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub fn routes() -> Router<&'static AppState> {
     Router::new().route("/hello", post(hello))
 }
 
@@ -24,7 +23,9 @@ struct HelloRequest {
 impl HelloRequest {
     fn validate(&self) -> Result<(), Exception> {
         if self.message.len() > 10 {
-            return Err(validation_error!(message = "message len must less than 10"));
+            let exception = validation_error!(message = "message len must less than 10");
+            warn!("test log, error={exception:?}");
+            return Err(exception);
         }
         Ok(())
     }

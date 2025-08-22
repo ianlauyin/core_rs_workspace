@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::Router;
 use framework::exception::Exception;
 use framework::log;
@@ -24,7 +22,7 @@ async fn main() -> Result<(), Exception> {
     let signal = shutdown.subscribe();
     shutdown.listen();
 
-    let state = Arc::new(AppState {});
+    let state = Box::leak(Box::new(AppState {}));
 
     let app = Router::new();
     let app = app.merge(web::routes());
