@@ -1,21 +1,12 @@
-use std::sync::Arc;
+use std::fs;
 
-use axum::Router;
-use chrono::FixedOffset;
-use chrono::NaiveTime;
 use framework::asset::asset_path;
 use framework::exception::Exception;
 use framework::json;
-use framework::kafka::consumer::ConsumerConfig;
-use framework::kafka::consumer::MessageConsumer;
-use framework::kafka::topic::Topic;
 use framework::log;
 use framework::log::ConsoleAppender;
-use framework::schedule::Scheduler;
 use framework::shutdown::Shutdown;
 use framework::task;
-use framework::web::server::HttpServerConfig;
-use framework::web::server::start_http_server;
 use serde::Deserialize;
 
 mod kibana;
@@ -59,7 +50,12 @@ async fn main() -> Result<(), Exception> {
     // let state = Arc::new(AppState::new(&config)?);
     // let consumer_state = state.clone();
 
-    task::spawn_action("import_kibana_objects", async { Ok(()) });
+    let kibana_uri = config.kibana_uri.clone();
+    task::spawn_action("import_kibana_objects", async move {
+        let objects = fs::read_to_string(&asset_path("assets/kibana_objects.json")?)?;
+        kibana::import(&kibana_uri, objects).await?;
+        Ok(())
+    });
 
     // task::spawn_task(async move {
     //     let mut consumer = MessageConsumer::new(ConsumerConfig {

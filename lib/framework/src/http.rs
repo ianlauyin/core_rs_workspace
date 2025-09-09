@@ -1,14 +1,8 @@
 use std::collections::HashMap;
-use std::io;
 use std::time::Duration;
 
-use bytes::Bytes;
-use futures::AsyncBufReadExt;
-use futures::Stream;
-use futures::TryStreamExt;
-use futures::io::Lines;
-use futures::stream::IntoAsyncRead;
-use futures::stream::MapErr;
+pub use http::HeaderName;
+pub use http::header;
 use reqwest::Body;
 use reqwest::Method;
 use reqwest::Request;
@@ -26,8 +20,8 @@ pub struct HttpClient {
 pub struct HttpRequest {
     pub method: HttpMethod,
     pub url: String,
-    pub headers: HashMap<&'static str, String>,
-    pub body: Option<String>,
+    pub headers: HashMap<HeaderName, String>,
+    body: Option<String>,
 }
 
 impl HttpRequest {
@@ -38,6 +32,11 @@ impl HttpRequest {
             headers: HashMap::new(),
             body: None,
         }
+    }
+
+    pub fn body(&mut self, body: String, content_type: String) {
+        self.body = Some(body);
+        self.headers.insert(header::CONTENT_TYPE, content_type);
     }
 }
 
@@ -61,30 +60,9 @@ impl From<HttpMethod> for Method {
 }
 
 pub struct HttpResponse {
-    response: reqwest::Response,
-}
-
-type BytesResult = Result<Bytes, reqwest::Error>;
-impl HttpResponse {
-    pub fn lines(
-        self,
-    ) -> Lines<IntoAsyncRead<MapErr<impl Stream<Item = BytesResult>, impl FnMut(reqwest::Error) -> io::Error>>> {
-        self.response
-            .bytes_stream()
-            .map_err(io::Error::other)
-            .into_async_read()
-            .lines()
-    }
-
-    pub async fn text(self) -> Result<String, Exception> {
-        let body = self.response.text().await?;
-        debug!("[response] body={body}");
-        Ok(body)
-    }
-
-    pub fn status_code(&self) -> u16 {
-        self.response.status().as_u16()
-    }
+    pub status: u16,
+    pub headers: HashMap<HeaderName, String>,
+    pub body: String,
 }
 
 impl HttpClient {
@@ -105,12 +83,23 @@ impl HttpClient {
             }
 
             let response = self.client.execute(http_request).await?;
-            debug!(status = response.status().as_u16(), "[response]");
+            let status = response.status().as_u16();
+            let mut headers = HashMap::new();
+            debug!(status, "[response]");
             for (key, value) in response.headers() {
-                debug!("[header] {}={}", key, value.to_str()?);
+                let value = value.to_str()?;
+                debug!("[header] {key}={value}");
+                headers.insert(key.to_owned(), value.to_string());
             }
 
-            Ok(HttpResponse { response })
+            let body = response.text().await?;
+            if let Some(content_type) = headers.get(&header::CONTENT_TYPE)
+                && (content_type.contains("json") || content_type.contains("text"))
+            {
+                debug!("[response] body={body}");
+            }
+
+            Ok(HttpResponse { status, headers, body })
         }
         .instrument(span)
         .await

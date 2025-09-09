@@ -13,10 +13,10 @@ serde_json = "*"
 tokio.workspace = true
 tokio-util = { version = "*", features = ["rt"] }
 
+http = "*"
 axum.workspace = true
 axum-extra.workspace = true
 axum-server = { version = "*", features = ["tls-rustls"] }
-
 reqwest.workspace = true
 
 rdkafka.workspace = true

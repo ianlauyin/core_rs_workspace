@@ -1,4 +1,4 @@
 {
   "kafka_uri": "dev.internal:9092",
-  "kibana_uri": "http:://deb.internal:5601"
+  "kibana_uri": "http://dev.internal:5601"
 }

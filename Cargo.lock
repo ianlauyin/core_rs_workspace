@@ -494,6 +494,7 @@ dependencies = [
  "bytes",
  "chrono",
  "futures",
+ "http",
  "indexmap",
  "rdkafka",
  "reqwest",
