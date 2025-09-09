@@ -81,6 +81,10 @@ impl HttpResponse {
         debug!("[response] body={body}");
         Ok(body)
     }
+
+    pub fn status_code(&self) -> u16 {
+        self.response.status().as_u16()
+    }
 }
 
 impl HttpClient {

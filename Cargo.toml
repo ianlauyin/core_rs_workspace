@@ -25,7 +25,6 @@ rdkafka = { version = "*", default-features = false, features = [
 uuid = { version = "*", features = ["v7"] }
 chrono = { version = "*", features = ["serde"] }
 
-
 # [profile.release]
 # debug = "line-tables-only"
 # opt-level = 3

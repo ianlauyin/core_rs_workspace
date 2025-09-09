@@ -21,8 +21,9 @@ COPY        --from=builder /usr/local/bin/duckdb /usr/local/bin/duckdb
 COPY        --from=builder /opt/google-cloud-sdk /opt/google-cloud-sdk
 RUN         ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
 
-COPY        --from=builder /usr/local/cargo/bin/log_exporter /usr/local/bin/log_exporter
-COPY        --from=builder /usr/src/app/log_exporter/conf/conf.json /usr/local/etc/log_exporter.json
+RUN         mkdir -p /opt/log_exporter
+COPY        --from=builder /usr/local/cargo/bin/log_exporter /opt/log_exporter/
+COPY        --from=builder /usr/src/app/log_exporter/assets /opt/log_exporter/
 
 # gcloud iam requires user home
 RUN         addgroup --gid 1000 --system app && adduser --system --home /home/app --ingroup app --uid 1000 app
@@ -30,5 +31,4 @@ RUN         mkdir -p /var/log/app && chown -R app:app /var/log/app
 VOLUME      /var/log/app
 USER        1000
 
-ENTRYPOINT  ["log_exporter"]
-CMD         ["/usr/local/etc/log_exporter.json"]
+ENTRYPOINT  ["/opt/log_exporter/log_exporter"]

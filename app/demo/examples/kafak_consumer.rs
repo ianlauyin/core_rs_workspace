@@ -5,7 +5,6 @@ use framework::kafka::consumer::ConsumerConfig;
 use framework::kafka::consumer::Message;
 use framework::kafka::consumer::MessageConsumer;
 use framework::kafka::producer::Producer;
-use framework::kafka::producer::ProducerConfig;
 use framework::kafka::topic::Topic;
 use framework::log;
 use framework::log::ConsoleAppender;
@@ -42,9 +41,7 @@ pub async fn main() -> Result<(), Exception> {
             test_single: Topic::new("test_single"),
             test_bulk: Topic::new("test"),
         },
-        producer: Producer::new(ProducerConfig {
-            bootstrap_servers: "dev.internal:9092".to_string(),
-        }),
+        producer: Producer::new("dev.internal:9092", env!("CARGO_BIN_NAME")),
         tx,
     });
 
@@ -54,11 +51,7 @@ pub async fn main() -> Result<(), Exception> {
 
     let handle = tokio::spawn(process_message(rx));
 
-    let mut consumer = MessageConsumer::new(ConsumerConfig {
-        group_id: "log-exporter",
-        bootstrap_servers: "dev.internal:9092".to_owned(),
-        ..Default::default()
-    });
+    let mut consumer = MessageConsumer::new("dev.internal:9092", env!("CARGO_BIN_NAME"), ConsumerConfig::default());
 
     consumer.add_handler(&state.topics.test_single, handler_single);
     consumer.add_bulk_handler(&state.topics.test_bulk, handler_bulk);

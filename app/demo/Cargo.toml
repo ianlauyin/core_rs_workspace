@@ -13,3 +13,5 @@ tokio.workspace = true
 axum.workspace = true
 axum-extra.workspace = true
 rdkafka.workspace = true
+
+bytes = "*"

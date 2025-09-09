@@ -1,6 +1,5 @@
 use framework::exception::Exception;
 use framework::kafka::producer::Producer;
-use framework::kafka::producer::ProducerConfig;
 use framework::kafka::topic::Topic;
 use serde::Deserialize;
 use serde::Serialize;
@@ -12,9 +11,7 @@ struct TestMessage {
 
 #[tokio::main]
 pub async fn main() -> Result<(), Exception> {
-    let producer = Producer::new(ProducerConfig {
-        bootstrap_servers: "dev.internal:9092".to_string(),
-    });
+    let producer = Producer::new("dev.internal:9092", env!("CARGO_BIN_NAME"));
 
     let topic = Topic::new("test");
 

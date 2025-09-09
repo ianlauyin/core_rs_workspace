@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::Router;
-use framework::conf::load_conf;
+use framework::asset::asset_path;
 use framework::exception::Exception;
+use framework::json;
 use framework::kafka::producer::Producer;
-use framework::kafka::producer::ProducerConfig;
 use framework::kafka::topic::Topic;
 use framework::log;
 use framework::log::ConsoleAppender;
@@ -22,14 +22,6 @@ struct AppConfig {
     kafka_uri: String,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        AppConfig {
-            kafka_uri: "dev.internal:9092".to_owned(),
-        }
-    }
-}
-
 pub struct AppState {
     topics: Topics,
     producer: Producer,
@@ -41,9 +33,7 @@ impl AppState {
             topics: Topics {
                 event: Topic::new("event"),
             },
-            producer: Producer::new(ProducerConfig {
-                bootstrap_servers: config.kafka_uri.to_string(),
-            }),
+            producer: Producer::new(&config.kafka_uri, env!("CARGO_BIN_NAME")),
         })
     }
 }
@@ -56,7 +46,7 @@ struct Topics {
 async fn main() -> Result<(), Exception> {
     log::init_with_action(ConsoleAppender);
 
-    let config: AppConfig = load_conf()?;
+    let config: AppConfig = json::load_file(&asset_path("assets/conf.json")?)?;
 
     let shutdown = Shutdown::new();
     let signal = shutdown.subscribe();

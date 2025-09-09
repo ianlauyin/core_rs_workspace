@@ -28,7 +28,6 @@ use tracing::error;
 use tracing::info;
 
 use super::topic::Topic;
-use crate::env;
 use crate::exception::Exception;
 use crate::json::from_json;
 use crate::log;
@@ -62,8 +61,6 @@ where
 }
 
 pub struct ConsumerConfig {
-    pub group_id: &'static str,
-    pub bootstrap_servers: String,
     pub poll_max_wait_time: Duration,
     pub poll_max_records: usize,
 }
@@ -71,8 +68,6 @@ pub struct ConsumerConfig {
 impl Default for ConsumerConfig {
     fn default() -> Self {
         Self {
-            group_id: env::APP_NAME,
-            bootstrap_servers: "localhost:9092".to_owned(),
             poll_max_wait_time: Duration::from_secs(1),
             poll_max_records: 1000,
         }
@@ -90,11 +85,11 @@ impl<S> MessageConsumer<S>
 where
     S: Send + Sync + 'static,
 {
-    pub fn new(config: ConsumerConfig) -> Self {
+    pub fn new(bootstrap_servers: &str, group_id: &str, config: ConsumerConfig) -> Self {
         Self {
             config: ClientConfig::new()
-                .set("group.id", config.group_id)
-                .set("bootstrap.servers", config.bootstrap_servers)
+                .set("group.id", group_id)
+                .set("bootstrap.servers", bootstrap_servers)
                 .set("enable.auto.commit", "false")
                 .set_log_level(RDKafkaLogLevel::Info)
                 .to_owned(),

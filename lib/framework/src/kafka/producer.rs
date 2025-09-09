@@ -13,28 +13,27 @@ use tracing::debug;
 use tracing::debug_span;
 
 use super::topic::Topic;
-use crate::env;
 use crate::exception::Exception;
 use crate::json::to_json;
 use crate::log::current_action_id;
 
-pub struct ProducerConfig {
-    pub bootstrap_servers: String,
-}
-
 pub struct Producer {
     producer: FutureProducer,
+    client: String,
 }
 
 impl Producer {
-    pub fn new(config: ProducerConfig) -> Self {
+    pub fn new(bootstrap_servers: &str, client: &str) -> Self {
         let producer: FutureProducer = ClientConfig::new()
-            .set("bootstrap.servers", config.bootstrap_servers)
+            .set("bootstrap.servers", bootstrap_servers)
             .set("message.timeout.ms", "5000")
             .set("compression.codec", "zstd")
             .create()
             .expect("Producer creation error");
-        Self { producer }
+        Self {
+            producer,
+            client: client.to_owned(),
+        }
     }
 
     pub async fn send<T>(&self, topic: &Topic<T>, key: Option<String>, message: &T) -> Result<(), Exception>
@@ -53,7 +52,7 @@ impl Producer {
                 record = record.key(key);
             }
 
-            let mut headers = insert_header(OwnedHeaders::new(), "client", env::APP_NAME);
+            let mut headers = insert_header(OwnedHeaders::new(), "client", &self.client);
             if let Some(ref ref_id) = current_action_id() {
                 headers = insert_header(headers, "ref_id", ref_id);
             }

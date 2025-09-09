@@ -3,8 +3,9 @@ use std::sync::Arc;
 use axum::Router;
 use chrono::FixedOffset;
 use chrono::NaiveTime;
-use framework::conf::load_conf;
+use framework::asset::asset_path;
 use framework::exception::Exception;
+use framework::json;
 use framework::kafka::consumer::ConsumerConfig;
 use framework::kafka::consumer::MessageConsumer;
 use framework::kafka::topic::Topic;
@@ -33,16 +34,6 @@ struct AppConfig {
     kafka_uri: String,
     log_dir: String,
     bucket: String,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        AppConfig {
-            log_dir: "./log".to_owned(),
-            kafka_uri: "dev.internal:9092".to_owned(),
-            bucket: "gs://archive/log".to_owned(),
-        }
-    }
 }
 
 pub struct AppState {
@@ -79,7 +70,7 @@ struct Topics {
 async fn main() -> Result<(), Exception> {
     log::init_with_action(ConsoleAppender);
 
-    let config: AppConfig = load_conf()?;
+    let config: AppConfig = json::load_file(&asset_path("assets/conf.json")?)?;
 
     let shutdown = Shutdown::new();
     let http_signal = shutdown.subscribe();
@@ -102,10 +93,7 @@ async fn main() -> Result<(), Exception> {
     });
 
     task::spawn_task(async move {
-        let mut consumer = MessageConsumer::new(ConsumerConfig {
-            bootstrap_servers: config.kafka_uri.clone(),
-            ..Default::default()
-        });
+        let mut consumer = MessageConsumer::new(&config.kafka_uri, env!("CARGO_BIN_NAME"), ConsumerConfig::default());
         consumer.add_bulk_handler(&consumer_state.topics.action, action_log_message_handler);
         consumer.add_bulk_handler(&consumer_state.topics.event, event_message_handler);
         consumer.start(consumer_state, consumer_signal).await

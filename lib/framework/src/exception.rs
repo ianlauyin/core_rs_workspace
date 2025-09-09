@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,7 +25,7 @@ pub enum Severity {
 }
 
 impl Display for Severity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Severity::Warn => write!(f, "WARN"),
             Severity::Error => write!(f, "ERROR"),
@@ -33,13 +34,13 @@ impl Display for Severity {
 }
 
 impl Debug for Exception {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
 }
 
 impl Display for Exception {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut index = 0;
         let mut current_source = Some(self);
         while let Some(source) = current_source {
