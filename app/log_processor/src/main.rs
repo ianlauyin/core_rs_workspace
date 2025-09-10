@@ -1,40 +1,43 @@
 use std::fs;
+use std::sync::Arc;
 
 use framework::asset::asset_path;
 use framework::exception::Exception;
 use framework::json;
+use framework::kafka::consumer::ConsumerConfig;
+use framework::kafka::consumer::MessageConsumer;
+use framework::kafka::topic::Topic;
 use framework::log;
 use framework::log::ConsoleAppender;
 use framework::shutdown::Shutdown;
 use framework::task;
 use serde::Deserialize;
 
+use crate::kafka::action_log_handler::action_log_message_handler;
+use crate::kafka::event_handler::event_message_handler;
+use crate::opensearch::Opensearch;
+
+mod kafka;
 mod kibana;
+mod opensearch;
 
 #[derive(Debug, Deserialize, Clone)]
 struct AppConfig {
     kafka_uri: String,
+    opensearch_uri: String,
     kibana_uri: String,
 }
 
 pub struct AppState {
-    topics: Topics,
+    opensearch: Opensearch,
 }
 
 impl AppState {
     fn new(config: &AppConfig) -> Result<Self, Exception> {
         Ok(AppState {
-            topics: Topics {
-                // action: Topic::new("action-log-v2"),
-                // event: Topic::new("event"),
-            },
+            opensearch: Opensearch::new(&config.opensearch_uri),
         })
     }
-}
-
-struct Topics {
-    // action: Topic<ActionLogMessage>,
-    // event: Topic<EventMessage>,
 }
 
 #[tokio::main]
@@ -44,11 +47,8 @@ async fn main() -> Result<(), Exception> {
     let config: AppConfig = json::load_file(&asset_path("assets/conf.json")?)?;
 
     let shutdown = Shutdown::new();
-    // let consumer_signal = shutdown.subscribe();
+    let consumer_signal = shutdown.subscribe();
     shutdown.listen();
-
-    // let state = Arc::new(AppState::new(&config)?);
-    // let consumer_state = state.clone();
 
     let kibana_uri = config.kibana_uri.clone();
     task::spawn_action("import_kibana_objects", async move {
@@ -57,17 +57,21 @@ async fn main() -> Result<(), Exception> {
         Ok(())
     });
 
-    // task::spawn_task(async move {
-    //     let mut consumer = MessageConsumer::new(ConsumerConfig {
-    //         bootstrap_servers: config.kafka_uri.clone(),
-    //         ..Default::default()
-    //     });
-    //     consumer.add_bulk_handler(&consumer_state.topics.action, action_log_message_handler);
-    //     consumer.add_bulk_handler(&consumer_state.topics.event, event_message_handler);
-    //     consumer.start(consumer_state, consumer_signal).await
-    // });
+    let state = Arc::new(AppState::new(&config)?);
+
+    put_index_templates(&state.opensearch).await?;
+
+    let mut consumer = MessageConsumer::new(&config.kafka_uri, env!("CARGO_BIN_NAME"), ConsumerConfig::default());
+    consumer.add_bulk_handler(&Topic::new("action-log-v2"), action_log_message_handler);
+    consumer.add_bulk_handler(&Topic::new("event"), event_message_handler);
+    consumer.start(state, consumer_signal).await?;
 
     task::shutdown().await;
 
+    Ok(())
+}
+
+async fn put_index_templates(opensearch: &Opensearch) -> Result<(), Exception> {
+    opensearch.put_index_template("action-*", "hello".to_string()).await?;
     Ok(())
 }

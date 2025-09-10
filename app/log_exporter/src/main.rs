@@ -24,10 +24,10 @@ use kafka::event_handler::event_message_handler;
 use serde::Deserialize;
 use sha2::Digest;
 
-pub mod job;
-pub mod kafka;
-pub mod service;
-pub mod web;
+mod job;
+mod kafka;
+mod service;
+mod web;
 
 #[derive(Debug, Deserialize, Clone)]
 struct AppConfig {

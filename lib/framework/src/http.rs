@@ -34,9 +34,9 @@ impl HttpRequest {
         }
     }
 
-    pub fn body(&mut self, body: String, content_type: String) {
+    pub fn body(&mut self, body: String, content_type: impl Into<String>) {
         self.body = Some(body);
-        self.headers.insert(header::CONTENT_TYPE, content_type);
+        self.headers.insert(header::CONTENT_TYPE, content_type.into());
     }
 }
 
