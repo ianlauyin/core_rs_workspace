@@ -39,9 +39,80 @@ pub struct PerformanceStatMessage {
     write_entries: Option<i64>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ActionLogDocument {
+    #[serde(rename = "@timestamp")]
+    timestamp: DateTime<Utc>,
+    app: String,
+    host: String,
+    result: String,
+    action: String,
+    #[serde(rename = "correlation_id")]
+    correlation_ids: Option<Vec<String>>,
+    #[serde(rename = "client")]
+    clients: Option<Vec<String>>,
+    #[serde(rename = "ref_id")]
+    ref_ids: Option<Vec<String>>,
+    error_code: Option<String>,
+    error_message: Option<String>,
+    elapsed: i64,
+    context: HashMap<String, Vec<Option<String>>>,
+    stats: HashMap<String, f64>,
+    perf_stats: HashMap<String, PerformanceStatMessage>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TraceDocument {
+    #[serde(rename = "@timestamp")]
+    timestamp: DateTime<Utc>,
+    app: String,
+    result: String,
+    action: String,
+    error_code: Option<String>,
+    content: String,
+}
+
 pub async fn action_log_message_handler(
-    _state: Arc<AppState>,
-    _messages: Vec<Message<ActionLogMessage>>,
+    state: Arc<AppState>,
+    messages: Vec<Message<ActionLogMessage>>,
 ) -> Result<(), Exception> {
+    let mut documents: Vec<(String, ActionLogDocument)> = Vec::with_capacity(messages.len());
+    let mut traces: Vec<(String, TraceDocument)> = vec![];
+    for message in messages {
+        let payload = message.payload()?;
+        let doc = ActionLogDocument {
+            timestamp: payload.date,
+            app: payload.app.clone(),
+            host: payload.host,
+            result: payload.result.clone(),
+            action: payload.action.clone(),
+            correlation_ids: payload.correlation_ids,
+            clients: payload.clients,
+            ref_ids: payload.ref_ids,
+            error_code: payload.error_code.clone(),
+            error_message: payload.error_message,
+            elapsed: payload.elapsed,
+            context: payload.context,
+            stats: payload.stats,
+            perf_stats: payload.perf_stats,
+        };
+        documents.push((payload.id.clone(), doc));
+
+        if let Some(content) = payload.trace_log {
+            let doc = TraceDocument {
+                timestamp: payload.date,
+                app: payload.app,
+                result: payload.result,
+                action: payload.action,
+                error_code: payload.error_code,
+                content,
+            };
+            traces.push((payload.id, doc));
+        }
+    }
+    state.opensearch.bulk_index("action-2025-09-10", documents).await?;
+    if !traces.is_empty() {
+        state.opensearch.bulk_index("trace-2025-09-10", traces).await?;
+    }
     Ok(())
 }

@@ -3,8 +3,8 @@
   "priority": 1,
   "template": {
     "settings": {
-      "number_of_shards": "${NUMBER_OF_SHARDS}",
-      "refresh_interval": "${REFRESH_INTERVAL}"
+      "number_of_shards": "1",
+      "refresh_interval": "10s"
     },
     "mappings": {
       "properties": {

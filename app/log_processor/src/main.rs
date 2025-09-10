@@ -72,6 +72,29 @@ async fn main() -> Result<(), Exception> {
 }
 
 async fn put_index_templates(opensearch: &Opensearch) -> Result<(), Exception> {
-    opensearch.put_index_template("action-*", "hello".to_string()).await?;
+    opensearch
+        .put_index_template(
+            "action",
+            fs::read_to_string(&asset_path("assets/index/action-index-template.json")?)?,
+        )
+        .await?;
+    opensearch
+        .put_index_template(
+            "event",
+            fs::read_to_string(&asset_path("assets/index/event-index-template.json")?)?,
+        )
+        .await?;
+    opensearch
+        .put_index_template(
+            "stat",
+            fs::read_to_string(&asset_path("assets/index/stat-index-template.json")?)?,
+        )
+        .await?;
+    opensearch
+        .put_index_template(
+            "trace",
+            fs::read_to_string(&asset_path("assets/index/trace-index-template.json")?)?,
+        )
+        .await?;
     Ok(())
 }
