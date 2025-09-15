@@ -14,3 +14,5 @@ RUN     /usr/share/opensearch/bin/opensearch-plugin remove opensearch-knn
 RUN     /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ltr
 RUN     /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ubi
 RUN     /usr/share/opensearch/bin/opensearch-plugin remove opensearch-performance-analyzer
+RUN     /usr/share/opensearch/bin/opensearch-plugin remove opensearch-sql
+RUN     /usr/share/opensearch/bin/opensearch-plugin remove query-insights
