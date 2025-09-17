@@ -1,5 +1,4 @@
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
@@ -25,15 +24,15 @@ pub struct JobContext {
 }
 
 trait Job<S>: Send {
-    fn execute(&self, state: Arc<S>, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    fn execute(&self, state: S, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 impl<F, Fut, S> Job<S> for F
 where
-    F: Fn(Arc<S>, JobContext) -> Fut + Send,
+    F: Fn(S, JobContext) -> Fut + Send,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    fn execute(&self, state: Arc<S>, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn execute(&self, state: S, context: JobContext) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(self(state, context))
     }
 }
@@ -66,7 +65,7 @@ where
 
     pub fn schedule_fixed_rate<J, Fut>(&mut self, name: &'static str, job: J, interval: Duration)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        J: Fn(S, JobContext) -> Fut + Copy + Send + 'static,
         Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
         let trigger = Box::new(FixedRateTrigger { interval });
@@ -75,7 +74,7 @@ where
 
     pub fn schedule_daily<J, Fut>(&mut self, name: &'static str, job: J, time: NaiveTime)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        J: Fn(S, JobContext) -> Fut + Copy + Send + 'static,
         Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
         let trigger = Box::new(DailyTrigger {
@@ -87,10 +86,10 @@ where
 
     fn add_job<J, Fut>(&mut self, name: &'static str, job: J, trigger: Box<dyn Trigger>)
     where
-        J: Fn(Arc<S>, JobContext) -> Fut + Copy + Send + 'static,
+        J: Fn(S, JobContext) -> Fut + Copy + Send + 'static,
         Fut: Future<Output = Result<(), Exception>> + Send + 'static,
     {
-        let job = move |state: Arc<S>, context| process_job(job, state, context);
+        let job = move |state: S, context| process_job(job, state, context);
         self.schedules.push(Schedule {
             name,
             job: Box::new(job),
@@ -98,7 +97,10 @@ where
         });
     }
 
-    pub async fn start(self, state: Arc<S>, shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception> {
+    pub async fn start(self, state: S, shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception>
+    where
+        S: Clone,
+    {
         let mut handles = vec![];
         for schedule in self.schedules {
             let state = state.clone();
@@ -140,9 +142,9 @@ where
     }
 }
 
-async fn process_job<S, J, Fut>(job: J, state: Arc<S>, context: JobContext)
+async fn process_job<S, J, Fut>(job: J, state: S, context: JobContext)
 where
-    J: Fn(Arc<S>, JobContext) -> Fut,
+    J: Fn(S, JobContext) -> Fut,
     Fut: Future<Output = Result<(), Exception>>,
 {
     log::start_action("job", None, async move {

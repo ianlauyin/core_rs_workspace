@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -47,15 +46,15 @@ impl<T: DeserializeOwned> Message<T> {
 }
 
 trait MessageHandler<S>: Send {
-    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    fn handle(&self, state: S, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 }
 
 impl<F, Fut, S> MessageHandler<S> for F
 where
-    F: Fn(Arc<S>, Vec<BorrowedMessage>) -> Fut + Send,
+    F: Fn(S, Vec<BorrowedMessage>) -> Fut + Send,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    fn handle(&self, state: Arc<S>, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn handle(&self, state: S, messages: Vec<BorrowedMessage>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(self(state, messages))
     }
 }
@@ -83,7 +82,7 @@ pub struct MessageConsumer<S> {
 
 impl<S> MessageConsumer<S>
 where
-    S: Send + Sync + 'static,
+    S: Clone + Send + Sync + 'static,
 {
     pub fn new(bootstrap_servers: &str, group_id: &str, config: ConsumerConfig) -> Self {
         Self {
@@ -101,12 +100,12 @@ where
 
     pub fn add_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
-        H: Fn(Arc<S>, Message<M>) -> Fut + Copy + Send + Sync + 'static,
+        H: Fn(S, Message<M>) -> Fut + Copy + Send + Sync + 'static,
         Fut: Future<Output = Result<(), Exception>> + Send + 'static,
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
-        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage>| {
+        let handler = move |state: S, messages: Vec<BorrowedMessage>| {
             let messages: Vec<Message<M>> = messages.into_iter().map(Message::from).collect();
             handle_messages(topic, messages, handler, state)
         };
@@ -116,12 +115,12 @@ where
 
     pub fn add_bulk_handler<H, Fut, M>(&mut self, topic: &Topic<M>, handler: H)
     where
-        H: Fn(Arc<S>, Vec<Message<M>>) -> Fut + Copy + Send + Sync + 'static,
+        H: Fn(S, Vec<Message<M>>) -> Fut + Copy + Send + Sync + 'static,
         Fut: Future<Output = Result<(), Exception>> + Send + 'static,
         M: DeserializeOwned + Send + 'static,
     {
         let topic = topic.name;
-        let handler = move |state: Arc<S>, messages: Vec<BorrowedMessage>| {
+        let handler = move |state: S, messages: Vec<BorrowedMessage>| {
             let messages: Vec<Message<M>> = messages.into_iter().map(Message::from).collect();
             handle_bulk_messages(topic, messages, handler, state)
         };
@@ -129,7 +128,7 @@ where
         self.handlers.insert(topic, Box::new(handler));
     }
 
-    pub async fn start(self, state: Arc<S>, mut shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception> {
+    pub async fn start(self, state: S, mut shutdown_signel: broadcast::Receiver<()>) -> Result<(), Exception> {
         let handlers = self.handlers;
         let consumer: BaseConsumer = self.config.create()?;
         let topics: Vec<&str> = handlers.keys().cloned().collect();
@@ -226,10 +225,9 @@ fn poll_message_groups(
     Ok(messages)
 }
 
-async fn handle_bulk_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<Message<M>>, handler: H, state: Arc<S>)
+async fn handle_bulk_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<Message<M>>, handler: H, state: S)
 where
-    S: Send + Sync + 'static,
-    H: Fn(Arc<S>, Vec<Message<M>>) -> Fut,
+    H: Fn(S, Vec<Message<M>>) -> Fut,
     Fut: Future<Output = Result<(), Exception>>,
     M: DeserializeOwned,
 {
@@ -256,10 +254,10 @@ where
     next: Option<Vec<MessageNode<M>>>,
 }
 
-async fn handle_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<Message<M>>, handler: H, state: Arc<S>)
+async fn handle_messages<H, S, M, Fut>(topic: &'static str, messages: Vec<Message<M>>, handler: H, state: S)
 where
-    S: Send + Sync + 'static,
-    H: Fn(Arc<S>, Message<M>) -> Fut + Copy + Send + Sync + 'static,
+    S: Clone + Send + Sync + 'static,
+    H: Fn(S, Message<M>) -> Fut + Copy + Send + Sync + 'static,
     Fut: Future<Output = Result<(), Exception>> + Send,
     M: DeserializeOwned + Send + 'static,
 {
@@ -299,9 +297,9 @@ where
     join_all(handles).await;
 }
 
-async fn handle_message<H, S, M, Fut>(topic: &'static str, message: Message<M>, handler: H, state: Arc<S>)
+async fn handle_message<H, S, M, Fut>(topic: &'static str, message: Message<M>, handler: H, state: S)
 where
-    H: Fn(Arc<S>, Message<M>) -> Fut,
+    H: Fn(S, Message<M>) -> Fut,
     Fut: Future<Output = Result<(), Exception>>,
     M: DeserializeOwned,
 {
@@ -325,7 +323,7 @@ where
             let lag = Utc::now() - timestamp;
             debug!("lag={lag}");
         }
-        handler(state.clone(), message).await
+        handler(state, message).await
     })
     .await;
 }
