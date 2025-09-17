@@ -23,7 +23,7 @@ RUN         ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
 
 RUN         mkdir -p /opt/log_exporter
 COPY        --from=builder /usr/local/cargo/bin/log_exporter /opt/log_exporter/
-COPY        --from=builder /usr/src/app/log_exporter/assets /opt/log_exporter/
+COPY        --from=builder /usr/src/app/log_exporter/assets /opt/log_exporter/assets
 
 # gcloud iam requires user home
 RUN         addgroup --gid 1000 --system app && adduser --system --home /home/app --ingroup app --uid 1000 app

@@ -9,11 +9,11 @@ RUN         cargo install --path app/log_collector
 FROM        debian:bookworm-slim
 COPY        --from=builder /etc/apt/sources.list.d/confluent.list /etc/apt/sources.list.d/confluent.list
 COPY        --from=builder /usr/share/keyrings/confluent.gpg /usr/share/keyrings/confluent.gpg
-RUN         apt-get update && apt-get install -y librdkafka-dev python3 && rm -rf /var/lib/apt/lists/*
+RUN         apt-get update && apt-get install -y librdkafka-dev && rm -rf /var/lib/apt/lists/*
 
 RUN         mkdir -p /opt/log_collector
 COPY        --from=builder /usr/local/cargo/bin/log_collector /opt/log_collector/
-COPY        --from=builder /usr/src/app/log_collector/assets /opt/log_collector/
+COPY        --from=builder /usr/src/app/log_collector/assets /opt/log_collector/assets
 
 RUN         addgroup --gid 1000 --system app && adduser --system --no-create-home --ingroup app --uid 1000 app
 USER        1000
