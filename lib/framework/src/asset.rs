@@ -51,5 +51,5 @@ fn find_asset_path(exe_path: &Path, path: &str) -> PathBuf {
 
 #[cfg(not(debug_assertions))]
 fn find_asset_path(exe_path: &Path, path: &str) -> PathBuf {
-    exe_path.with_file_name(path);
+    exe_path.with_file_name(path)
 }
