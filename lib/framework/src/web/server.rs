@@ -19,10 +19,12 @@ use tracing::info;
 use crate::exception::Exception;
 use crate::log;
 use crate::web::client_info::client_info;
+use crate::web::site_directory::SiteDirectory;
 
 pub struct HttpServerConfig {
     pub bind_address: String,
     pub max_forwarded_ips: usize,
+    pub site_directory: Option<SiteDirectory>,
 }
 
 impl Default for HttpServerConfig {
@@ -30,6 +32,7 @@ impl Default for HttpServerConfig {
         HttpServerConfig {
             bind_address: "0.0.0.0:8080".to_string(),
             max_forwarded_ips: 2,
+            site_directory: None,
         }
     }
 }
@@ -42,6 +45,8 @@ pub async fn start_http_server(
     let app = Router::new();
     let app = app.merge(router);
     let app = app.layer(middleware::from_fn(http_server_layer));
+    // Layer under middleware to avoid log for site
+    let app = merge_site_directory(app, &config);
     let app = app.into_make_service_with_connect_info::<SocketAddr>();
     let listener = TcpListener::bind(&config.bind_address).await?;
     info!("http server stated, bind={}", config.bind_address);
@@ -53,6 +58,16 @@ pub async fn start_http_server(
     info!("http server stopped");
 
     Ok(())
+}
+
+fn merge_site_directory(app: Router, config: &HttpServerConfig) -> Router {
+    if let Some(site_directory) = &config.site_directory {
+        if let Some(service) = site_directory.into_service() {
+            return app.fallback_service(service);
+        }
+    };
+
+    return app;
 }
 
 async fn http_server_layer(mut request: Request, next: Next) -> Response {
