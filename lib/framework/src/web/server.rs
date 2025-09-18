@@ -45,7 +45,7 @@ pub async fn start_http_server(
     let app = Router::new();
     let app = app.merge(router);
     let app = app.layer(middleware::from_fn(http_server_layer));
-    // Layer under middleware to avoid log for site
+    // merge site directory under middleware to avoid log for site
     let app = merge_site_directory(app, &config);
     let app = app.into_make_service_with_connect_info::<SocketAddr>();
     let listener = TcpListener::bind(&config.bind_address).await?;
@@ -66,7 +66,6 @@ fn merge_site_directory(app: Router, config: &HttpServerConfig) -> Router {
             return app.fallback_service(service);
         }
     };
-
     return app;
 }
 
