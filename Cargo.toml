@@ -10,7 +10,7 @@ serde = { version = "*", features = ["derive"] }
 
 tokio = { version = "*", features = ["full"] }
 axum = { version = "*", features = ["macros"] }
-axum-extra = { version = "*", features = ["cookie"] }
+
 reqwest = { version = "*", default-features = false, features = [
     "stream",
     "rustls-tls",

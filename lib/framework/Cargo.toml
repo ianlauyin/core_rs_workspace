@@ -15,10 +15,11 @@ tokio-util = { version = "*", features = ["rt"] }
 
 http = "*"
 axum.workspace = true
-axum-extra.workspace = true
+axum-extra = { version = "*", features = ["cookie"] }
 axum-server = { version = "*", features = ["tls-rustls"] }
-reqwest.workspace = true
 tower-http = {version ="*", features = ["fs"]}
+
+reqwest.workspace = true
 
 rdkafka.workspace = true
 

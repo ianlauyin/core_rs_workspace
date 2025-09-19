@@ -31,4 +31,4 @@ RUN         mkdir -p /var/log/app && chown -R app:app /var/log/app
 VOLUME      /var/log/app
 USER        1000
 
-ENTRYPOINT  ["/opt/log_exporter/log_exporter"]
+CMD         ["/opt/log_exporter/log_exporter"]
