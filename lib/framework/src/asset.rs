@@ -33,10 +33,8 @@ fn find_asset_path(exe_path: &Path, path: &str) -> PathBuf {
             .to_string_lossy()
             .ends_with(format!("/target/debug/{bin_name}").as_str())
         {
-            let mut asset_path = PathBuf::from(format!("app/{bin_name}/{path}"));
-            if !asset_path.exists() {
-                asset_path = PathBuf::from(format!("{bin_name}/{path}"));
-            }
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+            let asset_path = PathBuf::from(manifest_dir).join(path);
             if asset_path.exists() {
                 tracing::info!(
                     "load assert from source code folder, asset={}",
