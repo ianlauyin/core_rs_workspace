@@ -376,7 +376,6 @@ dependencies = [
  "chrono",
  "framework",
  "futures",
- "rdkafka",
  "serde",
  "tokio",
  "tokio-stream",
@@ -455,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "framework"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "axum",
  "axum-extra",
@@ -1036,12 +1035,11 @@ checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 
 [[package]]
 name = "log_collector"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "axum",
  "chrono",
  "framework",
- "rdkafka",
  "serde",
  "tokio",
  "tracing",
@@ -1049,13 +1047,12 @@ dependencies = [
 
 [[package]]
 name = "log_exporter"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "axum",
  "chrono",
  "framework",
  "hostname",
- "rdkafka",
  "serde",
  "sha2",
  "tokio",
@@ -1064,12 +1061,11 @@ dependencies = [
 
 [[package]]
 name = "log_processor"
-version = "0.3.1"
+version = "0.3.3"
 dependencies = [
  "axum",
  "chrono",
  "framework",
- "rdkafka",
  "serde",
  "tokio",
  "tracing",

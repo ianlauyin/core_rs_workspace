@@ -9,7 +9,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use framework::exception::Exception;
 use framework::kafka::consumer::Message;
-use rdkafka::message::ToBytes;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -47,7 +46,7 @@ pub async fn event_message_handler(
     let mut writer = LineWriter::new(file);
 
     for message in messages {
-        writer.write_all(message.payload.to_bytes())?;
+        writer.write_all(message.payload.as_bytes())?;
         writer.write_all(b"\n")?;
     }
     writer.flush().unwrap();

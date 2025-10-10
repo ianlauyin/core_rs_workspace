@@ -3,27 +3,15 @@ resolver = "3"
 members = ["app/*", "lib/*"]
 
 [workspace.dependencies]
-framework = { path = "lib/framework" }
+framework = { path = "lib/framework", features = ["kafka"] }
 
 tracing = "*"
 serde = { version = "*", features = ["derive"] }
 
 tokio = { version = "*", features = ["full"] }
 axum = { version = "*", features = ["macros"] }
-
-reqwest = { version = "*", default-features = false, features = [
-    "stream",
-    "rustls-tls",
-] }
-
-rdkafka = { version = "*", default-features = false, features = [
-    "dynamic-linking",
-    "tokio",
-    "zstd",
-] }
-
-uuid = { version = "*", features = ["v7"] }
 chrono = { version = "*", features = ["serde"] }
+
 
 # [profile.release]
 # debug = "line-tables-only"

@@ -1,6 +1,6 @@
 [package]
 name = "framework"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 
 [dependencies]
@@ -19,15 +19,25 @@ axum-extra = { version = "*", features = ["cookie"] }
 axum-server = { version = "*", features = ["tls-rustls"] }
 tower-http = {version ="*", features = ["fs"]}
 
-reqwest.workspace = true
+reqwest = { version = "*", default-features = false, features = [
+    "stream",
+    "rustls-tls",
+] }
 
-rdkafka.workspace = true
+rdkafka = { version = "*", default-features = false, features = [
+    "dynamic-linking",
+    "tokio",
+    "zstd",
+], optional = true }
 
 chrono.workspace = true
-uuid.workspace = true
+uuid = { version = "*", features = ["v7"] }
 
 futures = "*"
 bytes = "*"
 base64 = "*"
 bs58 = "*"
 indexmap = { version = "*", features = ["serde"] }
+
+[features]
+kafka = ["dep:rdkafka"]

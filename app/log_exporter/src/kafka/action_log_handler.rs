@@ -10,7 +10,6 @@ use chrono::Utc;
 use framework::exception::Exception;
 use framework::json;
 use framework::kafka::consumer::Message;
-use rdkafka::message::ToBytes;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -62,7 +61,7 @@ pub async fn action_log_message_handler(
 
     for message in messages {
         let log = message.payload()?;
-        writer.write_all(json::to_json(&log)?.to_bytes())?;
+        writer.write_all(json::to_json(&log)?.as_bytes())?;
         writer.write_all(b"\n")?;
     }
     writer.flush().unwrap();
