@@ -20,6 +20,7 @@ use tracing::debug_span;
 
 use crate::exception::Exception;
 
+#[derive(Clone)]
 pub struct HttpClient {
     client: reqwest::Client,
 }
