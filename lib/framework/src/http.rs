@@ -178,7 +178,7 @@ pub struct Event {
 }
 
 pub struct EventSource {
-    response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>>>>,
+    response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>> + Send>>,
     buffer: Vec<u8>,
     events: VecDeque<Event>,
     last_id: Option<String>,
@@ -186,7 +186,7 @@ pub struct EventSource {
 }
 
 impl EventSource {
-    fn new(response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>>>>) -> Self {
+    fn new(response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>> + Send>>) -> Self {
         EventSource {
             response,
             buffer: vec![],
