@@ -1,6 +1,13 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 
+use bytes::Bytes;
+use futures::Stream;
+use futures::TryStreamExt;
 pub use http::HeaderName;
 pub use http::header;
 use reqwest::Body;
@@ -25,10 +32,10 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    pub fn new(method: HttpMethod, url: String) -> Self {
+    pub fn new(method: HttpMethod, url: impl Into<String>) -> Self {
         HttpRequest {
             method,
-            url,
+            url: url.into(),
             headers: HashMap::new(),
             body: None,
         }
@@ -69,28 +76,13 @@ impl HttpClient {
     pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Exception> {
         let span = debug_span!("http_client", url = request.url, method = ?request.method);
         async {
-            debug!(method = ?request.method, "[request]");
-            debug!(url = request.url, "[request]");
-            let url = Url::parse(&request.url)?;
-            let mut http_request = Request::new(request.method.into(), url);
-            for (key, value) in request.headers {
-                debug!("[header] {}={}", key, value);
-                http_request.headers_mut().insert(key, value.parse()?);
-            }
-            if let Some(body) = request.body {
-                debug!("[request] body={body}");
-                *http_request.body_mut() = Some(Body::from(body));
-            }
+            let http_request = create_request(request)?;
 
             let response = self.client.execute(http_request).await?;
             let status = response.status().as_u16();
-            let mut headers = HashMap::new();
             debug!(status, "[response]");
-            for (key, value) in response.headers() {
-                let value = value.to_str()?;
-                debug!("[header] {key}={value}");
-                headers.insert(key.to_owned(), value.to_string());
-            }
+
+            let headers = parse_headers(&response)?;
 
             let body = response.text().await?;
             if let Some(content_type) = headers.get(&header::CONTENT_TYPE)
@@ -104,6 +96,63 @@ impl HttpClient {
         .instrument(span)
         .await
     }
+
+    pub async fn sse(&self, mut request: HttpRequest) -> Result<EventSource, Exception> {
+        let span = debug_span!("http_client", url = request.url, method = ?request.method);
+        async {
+            request.headers.insert(header::ACCEPT, "text/event-stream".to_string());
+            let http_request = create_request(request)?;
+
+            let response = self.client.execute(http_request).await?;
+            let status = response.status().as_u16();
+            debug!(status, "[response]");
+
+            let headers = parse_headers(&response)?;
+
+            if status == 200
+                && let Some(content_type) = headers.get(&header::CONTENT_TYPE)
+                && content_type.starts_with("text/event-stream")
+            {
+                let stream = response.bytes_stream();
+                Ok(EventSource::new(Box::pin(stream.map_err(|e| e.into()))))
+            } else {
+                let body = response.text().await?;
+                debug!("[response] body={body}");
+                let content_type = headers.get(&header::CONTENT_TYPE);
+                Err(exception!(
+                    message = format!("invalid sse response, status={status}, content_type={content_type:?}")
+                ))
+            }
+        }
+        .instrument(span)
+        .await
+    }
+}
+
+fn parse_headers(response: &reqwest::Response) -> Result<HashMap<HeaderName, String>, Exception> {
+    let mut headers = HashMap::new();
+    for (key, value) in response.headers() {
+        let value = value.to_str()?;
+        debug!("[header] {key}={value}");
+        headers.insert(key.to_owned(), value.to_string());
+    }
+    Ok(headers)
+}
+
+fn create_request(request: HttpRequest) -> Result<Request, Exception> {
+    debug!(method = ?request.method, "[request]");
+    debug!(url = request.url, "[request]");
+    let url = Url::parse(&request.url)?;
+    let mut http_request = Request::new(request.method.into(), url);
+    for (key, value) in request.headers {
+        debug!("[header] {}={}", key, value);
+        http_request.headers_mut().insert(key, value.parse()?);
+    }
+    if let Some(body) = request.body {
+        debug!("[request] body={body}");
+        *http_request.body_mut() = Some(Body::from(body));
+    }
+    Ok(http_request)
 }
 
 impl Default for HttpClient {
@@ -111,10 +160,86 @@ impl Default for HttpClient {
         HttpClient {
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
+                .danger_accept_invalid_certs(true)
                 .pool_idle_timeout(Duration::from_secs(300))
                 .connection_verbose(false)
                 .build()
                 .unwrap(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Event {
+    pub id: Option<String>,
+    pub r#type: Option<String>,
+    pub data: String,
+}
+
+pub struct EventSource {
+    response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>>>>,
+    buffer: Vec<u8>,
+    events: VecDeque<Event>,
+    last_id: Option<String>,
+    last_type: Option<String>,
+}
+
+impl EventSource {
+    fn new(response: Pin<Box<dyn Stream<Item = Result<Bytes, Exception>>>>) -> Self {
+        EventSource {
+            response,
+            buffer: vec![],
+            events: VecDeque::new(),
+            last_id: None,
+            last_type: None,
+        }
+    }
+}
+
+impl Stream for EventSource {
+    type Item = Result<Event, Exception>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        loop {
+            if let Some(event) = self.events.pop_front() {
+                return Poll::Ready(Some(Ok(event)));
+            }
+
+            match self.response.as_mut().poll_next(cx) {
+                Poll::Ready(Some(Ok(bytes))) => {
+                    for byte in bytes {
+                        if byte == b'\n' {
+                            let current_bytes = std::mem::take(&mut self.buffer);
+                            let line = String::from_utf8_lossy(&current_bytes);
+                            debug!("[sse] {line}");
+                            if line.is_empty() {
+                                continue;
+                            } else if let Some(index) = line.find(": ") {
+                                let field = &line[0..index];
+                                match field {
+                                    "id" => self.last_id = Some(line[index + 2..].to_string()),
+                                    "event" => self.last_type = Some(line[index + 2..].to_string()),
+                                    "data" => {
+                                        let id = self.last_id.take();
+                                        let r#type = self.last_type.take();
+                                        self.events.push_back(Event {
+                                            id,
+                                            r#type,
+                                            data: line[index + 2..].to_string(),
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        } else {
+                            self.buffer.push(byte);
+                        }
+                    }
+                }
+                Poll::Ready(Some(Err(err))) => return Poll::Ready(Some(Err(err))),
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
+            };
         }
     }
 }

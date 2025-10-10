@@ -30,7 +30,8 @@ async fn main() -> Result<(), Exception> {
     let app = app.merge(web::routes());
     let app = app
         .route_service("/", ServeFile::new(asset_path("assets/web/index.html")?))
-        .route_service("/static/{*path}", ServeDir::new(asset_path("assets/web/")?));
+        .route_service("/static/{*path}", ServeDir::new(asset_path("assets/web/")?))
+        .fallback_service(ServeFile::new(asset_path("assets/web/index.html")?));
     let app = app.with_state(state);
     start_http_server(app, signal, HttpServerConfig::default()).await
 }
