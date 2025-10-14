@@ -85,9 +85,9 @@ macro_rules! log_event {
     };
 }
 
-pub async fn start_action<T, R>(action: &str, ref_id: Option<String>, task: T)
+pub async fn start_action<T>(action: &str, ref_id: Option<String>, task: T)
 where
-    T: Future<Output = Result<R, Exception>>,
+    T: Future<Output = Result<(), Exception>>,
 {
     let action_id = id_generator::random_id();
     let action_span = info_span!("action", action, action_id, ref_id);
