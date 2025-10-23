@@ -1,3 +1,5 @@
+use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 use crate::exception::Exception;
@@ -11,8 +13,12 @@ impl PathBufExt for PathBuf {
         if self.is_absolute() {
             return Ok(self);
         }
-        let current_dir = std::env::current_dir()
-            .map_err(|err| exception!(message = "failed to get current directory", source = err))?;
-        Ok(current_dir.join(self))
+        let current_dir =
+            env::current_dir().map_err(|err| exception!(message = "failed to get current directory", source = err))?;
+
+        let absolute_path = current_dir.join(self);
+        let cannonical_path = fs::canonicalize(absolute_path)?;
+
+        Ok(cannonical_path)
     }
 }
