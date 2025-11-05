@@ -11,58 +11,46 @@ use serde::Serialize;
 
 use crate::AppState;
 
-// event message schema from java core-ng framework
+// stat message schema from java core-ng framework
 #[derive(Debug, Serialize, Deserialize)]
-pub struct EventMessage {
+pub struct StatMessage {
     id: String,
     date: DateTime<Utc>,
     app: String,
-    received_time: DateTime<Utc>,
+    host: String,
     result: String,
-    action: String,
     error_code: Option<String>,
     error_message: Option<String>,
-    elapsed: i64,
-    context: HashMap<String, String>,
     stats: HashMap<String, f64>,
     info: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct EventDocument {
+pub struct StatDocument {
     #[serde(rename = "@timestamp")]
     timestamp: DateTime<Utc>,
     app: String,
-    received_time: DateTime<Utc>,
+    host: String,
     result: String,
-    action: String,
     error_code: Option<String>,
     error_message: Option<String>,
-    context: HashMap<String, String>,
     stats: HashMap<String, f64>,
     info: HashMap<String, String>,
-    elapsed: i64,
 }
 
-pub async fn event_message_handler(
-    state: Arc<AppState>,
-    messages: Vec<Message<EventMessage>>,
-) -> Result<(), Exception> {
-    let mut documents: Vec<(String, EventDocument)> = Vec::with_capacity(messages.len());
+pub async fn stat_message_handler(state: Arc<AppState>, messages: Vec<Message<StatMessage>>) -> Result<(), Exception> {
+    let mut documents: Vec<(String, StatDocument)> = Vec::with_capacity(messages.len());
     for message in messages {
         let payload = message.payload()?;
-        let doc = EventDocument {
+        let doc = StatDocument {
             timestamp: payload.date,
             app: payload.app,
-            received_time: payload.received_time,
+            host: payload.host,
             result: payload.result,
-            action: payload.action,
             error_code: payload.error_code,
             error_message: payload.error_message,
-            context: payload.context,
             stats: payload.stats,
             info: payload.info,
-            elapsed: payload.elapsed,
         };
         documents.push((payload.id, doc));
     }
@@ -72,5 +60,18 @@ pub async fn event_message_handler(
 }
 
 fn index(now: NaiveDate) -> String {
-    format!("event-{}", now.format("%Y.%m.%d"))
+    format!("stat-{}", now.format("%Y.%m.%d")) // follow same pattern as elastic.co product line, e.g. metricbeats, in order to unify cleanup job
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+
+    #[test]
+    fn index() {
+        assert_eq!(
+            super::index(NaiveDate::from_ymd_opt(2025, 11, 5).unwrap()),
+            "stat-2025.11.05"
+        )
+    }
 }

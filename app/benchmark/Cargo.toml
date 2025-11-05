@@ -1,6 +1,6 @@
 [package]
-name = "log_processor"
-version = "0.3.3"
+name = "benchmark"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
@@ -9,6 +9,10 @@ framework.workspace = true
 tracing.workspace = true
 serde.workspace = true
 chrono.workspace = true
-tokio.workspace = true
-axum.workspace = true
-regex = "*"
+
+[dev-dependencies]
+criterion = "0"
+
+[[bench]]
+name = "json_bench"
+harness = false

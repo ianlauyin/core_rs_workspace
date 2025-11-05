@@ -1,20 +1,23 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use framework::exception;
 use framework::exception::Exception;
 use framework::http::HttpClient;
+use framework::http::HttpMethod::DELETE;
 use framework::http::HttpMethod::POST;
 use framework::http::HttpMethod::PUT;
 use framework::http::HttpRequest;
 use framework::json;
+use serde::Deserialize;
 use serde::Serialize;
 
-pub struct Opensearch {
+pub struct Elasticsearch {
     uri: String,
     client: HttpClient,
 }
 
-impl Opensearch {
+impl Elasticsearch {
     pub fn new(uri: &str) -> Self {
         Self {
             uri: uri.to_owned(),
@@ -58,4 +61,57 @@ impl Opensearch {
         }
         Ok(())
     }
+
+    pub async fn state(&self) -> Result<ClusterStateResponse, Exception> {
+        let uri = &self.uri;
+        let request = HttpRequest::new(PUT, format!("{uri}/_cluster/state"));
+        let response = self.client.execute(request).await?;
+        if response.status != 200 {
+            return Err(exception!(message = format!("failed to get state")));
+        }
+        json::from_json(&response.body)
+    }
+
+    pub async fn close_index(&self, index: String) -> Result<(), Exception> {
+        let uri = &self.uri;
+        let request = HttpRequest::new(POST, format!("{uri}/{index}/_close"));
+        let response = self.client.execute(request).await?;
+        if response.status != 200 {
+            return Err(exception!(message = format!("failed to close index, index={index}")));
+        }
+        Ok(())
+    }
+
+    pub async fn delete_index(&self, index: String) -> Result<(), Exception> {
+        let uri = &self.uri;
+        let request = HttpRequest::new(DELETE, format!("{uri}/{index}"));
+        let response = self.client.execute(request).await?;
+        if response.status != 200 {
+            return Err(exception!(message = format!("failed to delete index, index={index}")));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClusterStateResponse {
+    pub metadata: Metadata,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Metadata {
+    pub indices: HashMap<String, Index>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Index {
+    pub state: IndexState,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum IndexState {
+    #[serde(rename = "open")]
+    Open,
+    #[serde(rename = "close")]
+    Close,
 }

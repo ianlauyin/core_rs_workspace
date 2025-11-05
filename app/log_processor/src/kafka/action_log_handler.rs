@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use chrono::NaiveDate;
 use chrono::Utc;
 use framework::exception::Exception;
 use framework::kafka::consumer::Message;
@@ -110,9 +111,18 @@ pub async fn action_log_message_handler(
             traces.push((payload.id, doc));
         }
     }
-    state.opensearch.bulk_index("action-2025-09-10", documents).await?;
+    let now = Utc::now().date_naive();
+    state.elasticsearch.bulk_index(&action_index(now), documents).await?;
     if !traces.is_empty() {
-        state.opensearch.bulk_index("trace-2025-09-10", traces).await?;
+        state.elasticsearch.bulk_index(&trace_index(now), traces).await?;
     }
     Ok(())
+}
+
+fn action_index(now: NaiveDate) -> String {
+    format!("action-{}", now.format("%Y.%m.%d"))
+}
+
+fn trace_index(now: NaiveDate) -> String {
+    format!("trace-{}", now.format("%Y.%m.%d"))
 }

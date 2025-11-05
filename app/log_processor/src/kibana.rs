@@ -14,7 +14,7 @@ pub async fn import(kibana_uri: &str, objects: String) -> Result<(), Exception> 
     );
     request
         .headers
-        .insert(HeaderName::from_static("osd-xsrf"), "true".to_string());
+        .insert(HeaderName::from_static("kbn-xsrf"), "true".to_string());
     request.body(objects, "application/json".to_string());
 
     let response = http_client.execute(request).await?;

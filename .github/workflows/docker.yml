@@ -26,3 +26,9 @@ jobs:
           file: app/log_collector/Dockerfile
           tags: "neowu/log-collector:${{ env.TAG }}-rust"
           push: true
+      - uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: app/log_processor/Dockerfile
+          tags: "neowu/log-processor:${{ env.TAG }}-rust"
+          push: true
