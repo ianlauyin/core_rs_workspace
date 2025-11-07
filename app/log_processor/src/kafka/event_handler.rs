@@ -24,8 +24,8 @@ pub struct EventMessage {
     error_message: Option<String>,
     elapsed: i64,
     context: HashMap<String, String>,
-    stats: HashMap<String, f64>,
-    info: HashMap<String, String>,
+    stats: Option<HashMap<String, f64>>,
+    info: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -39,8 +39,8 @@ pub struct EventDocument {
     error_code: Option<String>,
     error_message: Option<String>,
     context: HashMap<String, String>,
-    stats: HashMap<String, f64>,
-    info: HashMap<String, String>,
+    stats: Option<HashMap<String, f64>>,
+    info: Option<HashMap<String, String>>,
     elapsed: i64,
 }
 

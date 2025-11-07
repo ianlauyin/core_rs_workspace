@@ -27,8 +27,8 @@ pub struct ActionLogMessage {
     error_message: Option<String>,
     elapsed: i64,
     context: HashMap<String, Vec<Option<String>>>,
-    stats: HashMap<String, f64>,
-    perf_stats: HashMap<String, PerformanceStatMessage>,
+    stats: Option<HashMap<String, f64>>,
+    perf_stats: Option<HashMap<String, PerformanceStatMessage>>,
     trace_log: Option<String>,
 }
 
@@ -58,8 +58,8 @@ pub struct ActionLogDocument {
     error_message: Option<String>,
     elapsed: i64,
     context: HashMap<String, Vec<Option<String>>>,
-    stats: HashMap<String, f64>,
-    perf_stats: HashMap<String, PerformanceStatMessage>,
+    stats: Option<HashMap<String, f64>>,
+    perf_stats: Option<HashMap<String, PerformanceStatMessage>>,
 }
 
 #[derive(Debug, Serialize)]

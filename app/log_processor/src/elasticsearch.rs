@@ -29,16 +29,22 @@ impl Elasticsearch {
     }
 
     pub async fn put_index_template(&self, name: &str, template: String) -> Result<(), Exception> {
-        let uri = &self.uri;
-        let mut request = HttpRequest::new(PUT, format!("{uri}/_index_template/{name}"));
-        request.body(template, "application/json");
-        let response = self.client.execute(request).await?;
-        if response.status != 200 {
-            return Err(exception!(
-                message = format!("failed to create index template, name={name}")
-            ));
+        let span = debug_span!("es");
+        async {
+            debug!(name, "put index tempalte");
+            let uri = &self.uri;
+            let mut request = HttpRequest::new(PUT, format!("{uri}/_index_template/{name}"));
+            request.body(template, "application/json");
+            let response = self.client.execute(request).await?;
+            if response.status != 200 {
+                return Err(exception!(
+                    message = format!("failed to create index template, name={name}")
+                ));
+            }
+            Ok(())
         }
-        Ok(())
+        .instrument(span)
+        .await
     }
 
     pub async fn bulk_index<T>(&self, index: &str, documents: Vec<(String, T)>) -> Result<(), Exception>
@@ -47,6 +53,7 @@ impl Elasticsearch {
     {
         let span = debug_span!("es", index);
         async {
+            debug!(index, "bulk index");
             let uri = &self.uri;
             let mut request = HttpRequest::new(POST, format!("{uri}/_bulk"));
 
@@ -71,35 +78,50 @@ impl Elasticsearch {
     }
 
     pub async fn state(&self) -> Result<ClusterStateResponse, Exception> {
-        let uri = &self.uri;
-        let request = HttpRequest::new(PUT, format!("{uri}/_cluster/state"));
-        let response = self.client.execute(request).await?;
-        if response.status != 200 {
-            return Err(exception!(message = format!("failed to get state")));
+        let span = debug_span!("es");
+        async {
+            let uri = &self.uri;
+            let request = HttpRequest::new(PUT, format!("{uri}/_cluster/state"));
+            let response = self.client.execute(request).await?;
+            if response.status != 200 {
+                return Err(exception!(message = format!("failed to get state")));
+            }
+            json::from_json(&response.body)
         }
-        json::from_json(&response.body)
+        .instrument(span)
+        .await
     }
 
     pub async fn close_index(&self, index: String) -> Result<(), Exception> {
-        debug!(index, "close index");
-        let uri = &self.uri;
-        let request = HttpRequest::new(POST, format!("{uri}/{index}/_close"));
-        let response = self.client.execute(request).await?;
-        if response.status != 200 {
-            return Err(exception!(message = format!("failed to close index, index={index}")));
+        let span = debug_span!("es");
+        async {
+            debug!(index, "close index");
+            let uri = &self.uri;
+            let request = HttpRequest::new(POST, format!("{uri}/{index}/_close"));
+            let response = self.client.execute(request).await?;
+            if response.status != 200 {
+                return Err(exception!(message = format!("failed to close index, index={index}")));
+            }
+            Ok(())
         }
-        Ok(())
+        .instrument(span)
+        .await
     }
 
     pub async fn delete_index(&self, index: String) -> Result<(), Exception> {
-        debug!(index, "delete index");
-        let uri = &self.uri;
-        let request = HttpRequest::new(DELETE, format!("{uri}/{index}"));
-        let response = self.client.execute(request).await?;
-        if response.status != 200 {
-            return Err(exception!(message = format!("failed to delete index, index={index}")));
+        let span = debug_span!("es");
+        async {
+            debug!(index, "delete index");
+            let uri = &self.uri;
+            let request = HttpRequest::new(DELETE, format!("{uri}/{index}"));
+            let response = self.client.execute(request).await?;
+            if response.status != 200 {
+                return Err(exception!(message = format!("failed to delete index, index={index}")));
+            }
+            Ok(())
         }
-        Ok(())
+        .instrument(span)
+        .await
     }
 }
 

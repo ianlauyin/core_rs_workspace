@@ -27,14 +27,20 @@ fn find_asset_path(exe_path: &Path, path: &str) -> PathBuf {
     if asset_path.exists() {
         return asset_path;
     }
+
+    // determine asset path by bin path, the current dir is different with IDE and command in terminal
     if let Some(bin_name) = exe_path.file_name() {
         let bin_name = bin_name.to_string_lossy();
-        if exe_path
-            .to_string_lossy()
-            .ends_with(format!("/target/debug/{bin_name}").as_str())
-        {
-            let manifest_dir = env!("CARGO_MANIFEST_DIR");
-            let asset_path = PathBuf::from(manifest_dir).join(path);
+        let postfix = format!("/target/debug/{bin_name}");
+        let exe_path = exe_path.to_string_lossy();
+        if exe_path.ends_with(&postfix) {
+            let workspace_path = &exe_path[..exe_path.len() - postfix.len()];
+
+            let mut asset_path = PathBuf::from(format!("{workspace_path}/app/{bin_name}/{path}"));
+
+            if !asset_path.exists() {
+                asset_path = PathBuf::from(format!("{workspace_path}/{bin_name}/{path}"));
+            }
             if asset_path.exists() {
                 tracing::info!(
                     "load assert from source code folder, asset={}",

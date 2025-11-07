@@ -22,7 +22,7 @@ pub struct StatMessage {
     error_code: Option<String>,
     error_message: Option<String>,
     stats: HashMap<String, f64>,
-    info: HashMap<String, String>,
+    info: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -35,7 +35,7 @@ pub struct StatDocument {
     error_code: Option<String>,
     error_message: Option<String>,
     stats: HashMap<String, f64>,
-    info: HashMap<String, String>,
+    info: Option<HashMap<String, String>>,
 }
 
 pub async fn stat_message_handler(state: Arc<AppState>, messages: Vec<Message<StatMessage>>) -> Result<(), Exception> {
