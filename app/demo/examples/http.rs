@@ -21,12 +21,15 @@ async fn main() {
     .await;
 }
 
-async fn _test_http() -> Result<(), Exception> {
+#[allow(unused)]
+async fn test_http() -> Result<(), Exception> {
     let http_client = HttpClient::default();
     let mut request = HttpRequest::new(POST, "https://localhost:8443");
     request.body("{some json}".to_owned(), "application/json".to_owned());
     request.headers.insert(header::USER_AGENT, "Rust".to_string());
+
     let _response = http_client.execute(request).await?;
+
     // let mut lines = response.lines();
     // while let Some(line) = lines.next().await {
     //     let line = line?;
@@ -37,6 +40,7 @@ async fn _test_http() -> Result<(), Exception> {
     Ok(())
 }
 
+#[allow(unused)]
 async fn test_sse() -> Result<(), Exception> {
     let http_client = HttpClient::default();
     let request = HttpRequest::new(GET, "https://localhost:8443/sse");

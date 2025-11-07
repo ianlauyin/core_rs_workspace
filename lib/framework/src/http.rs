@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
+use std::time::Instant;
 
 use bytes::Bytes;
 use futures::Stream;
@@ -91,6 +92,7 @@ impl HttpClient {
             {
                 debug!("[response] body={body}");
             }
+            debug!(read_bytes = body.len(), "stats");
 
             Ok(HttpResponse { status, headers, body })
         }
@@ -151,6 +153,7 @@ fn create_request(request: HttpRequest) -> Result<Request, Exception> {
     }
     if let Some(body) = request.body {
         debug!("[request] body={body}");
+        debug!(write_bytes = body.len(), "stats");
         *http_request.body_mut() = Some(Body::from(body));
     }
     Ok(http_request)
@@ -183,6 +186,10 @@ pub struct EventSource {
     events: VecDeque<Event>,
     last_id: Option<String>,
     last_type: Option<String>,
+
+    start_time: Instant,
+    read_bytes: usize,
+    read_entries: usize,
 }
 
 impl EventSource {
@@ -193,7 +200,22 @@ impl EventSource {
             events: VecDeque::new(),
             last_id: None,
             last_type: None,
+            start_time: Instant::now(),
+            read_bytes: 0,
+            read_entries: 0,
         }
+    }
+}
+
+impl Drop for EventSource {
+    fn drop(&mut self) {
+        debug!(
+            http_client_sse_read_entries = self.read_entries,
+            http_client_sse_read_bytes = self.read_bytes,
+            http_client_sse_elapsed = self.start_time.elapsed().as_nanos(),
+            http_client_sse_count = 1,
+            "stats"
+        );
     }
 }
 
@@ -213,6 +235,8 @@ impl Stream for EventSource {
                             let current_bytes = std::mem::take(&mut self.buffer);
                             let line = String::from_utf8_lossy(&current_bytes);
                             debug!("[sse] {line}");
+                            self.read_bytes += line.len();
+
                             if line.is_empty() {
                                 continue;
                             } else if let Some(index) = line.find(": ") {
@@ -228,6 +252,7 @@ impl Stream for EventSource {
                                             r#type,
                                             data: line[index + 2..].to_string(),
                                         });
+                                        self.read_entries += 1;
                                     }
                                     _ => {}
                                 }

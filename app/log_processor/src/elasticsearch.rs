@@ -11,6 +11,9 @@ use framework::http::HttpRequest;
 use framework::json;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::Instrument;
+use tracing::debug;
+use tracing::debug_span;
 
 pub struct Elasticsearch {
     uri: String,
@@ -42,24 +45,29 @@ impl Elasticsearch {
     where
         T: Serialize + Debug,
     {
-        let uri = &self.uri;
-        let mut request = HttpRequest::new(POST, format!("{uri}/_bulk"));
+        let span = debug_span!("es", index);
+        async {
+            let uri = &self.uri;
+            let mut request = HttpRequest::new(POST, format!("{uri}/_bulk"));
 
-        let mut body = String::new();
-        for (id, doc) in documents {
-            body.push_str(&format!(r#"{{"index":{{"_index":"{index}","_id":"{id}"}}}}"#));
-            body.push('\n');
-            body.push_str(&json::to_json(&doc)?);
-            body.push('\n');
+            let mut body = String::new();
+            for (id, doc) in documents.iter() {
+                body.push_str(&format!(r#"{{"index":{{"_index":"{index}","_id":"{id}"}}}}"#));
+                body.push('\n');
+                body.push_str(&json::to_json(doc)?);
+                body.push('\n');
+            }
+            debug!(write_entries = documents.len(), write_bytes = body.len(), "stats");
+            request.body(body, "application/json");
+
+            let response = self.client.execute(request).await?;
+            if response.status != 200 {
+                return Err(exception!(message = format!("failed to bulk index, index={index}")));
+            }
+            Ok(())
         }
-
-        request.body(body, "application/json");
-
-        let response = self.client.execute(request).await?;
-        if response.status != 200 {
-            return Err(exception!(message = format!("failed to bulk index, index={index}")));
-        }
-        Ok(())
+        .instrument(span)
+        .await
     }
 
     pub async fn state(&self) -> Result<ClusterStateResponse, Exception> {
@@ -73,6 +81,7 @@ impl Elasticsearch {
     }
 
     pub async fn close_index(&self, index: String) -> Result<(), Exception> {
+        debug!(index, "close index");
         let uri = &self.uri;
         let request = HttpRequest::new(POST, format!("{uri}/{index}/_close"));
         let response = self.client.execute(request).await?;
@@ -83,6 +92,7 @@ impl Elasticsearch {
     }
 
     pub async fn delete_index(&self, index: String) -> Result<(), Exception> {
+        debug!(index, "delete index");
         let uri = &self.uri;
         let request = HttpRequest::new(DELETE, format!("{uri}/{index}"));
         let response = self.client.execute(request).await?;
