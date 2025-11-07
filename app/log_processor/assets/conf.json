@@ -1,5 +1,6 @@
 {
   "kafka_uri": "dev.internal:9092",
   "elasticsearch_uri": "http://dev.internal:9200",
-  "kibana_uri": "http://dev.internal:5601"
+  "kibana_uri": "http://dev.internal:5601",
+  "banner": "# local"
 }

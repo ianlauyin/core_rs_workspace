@@ -32,6 +32,7 @@ struct AppConfig {
     kafka_uri: String,
     elasticsearch_uri: String,
     kibana_uri: String,
+    banner: String,
 }
 
 pub struct AppState {
@@ -58,8 +59,10 @@ async fn main() -> Result<(), Exception> {
     shutdown.listen();
 
     let kibana_uri = config.kibana_uri.clone();
+    let banner = config.banner.clone();
     task::spawn_action("import_kibana_objects", async move {
         let objects = fs::read_to_string(&asset_path("assets/kibana_objects.json")?)?;
+        let objects = objects.replace("${NOTIFICATION_BANNER}", &banner);
         kibana::import(&kibana_uri, objects).await?;
         Ok(())
     });
